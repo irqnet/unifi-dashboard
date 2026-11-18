@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import type { AdminNetwork, SiteInfo } from '@/lib/views';
 import { Button, Panel, SectionTitle, Toggle } from '../ui/primitives';
+import { AccessAdmin } from './AccessAdmin';
 import { DeviceGroups } from './DeviceGroups';
 import { GroupEditor, type AdminGroup, type GroupDraft } from './GroupEditor';
 
@@ -434,6 +435,9 @@ export function AdminPanel() {
           reloadSignal={reloadSignal}
           onError={setError}
         />
+
+        {/* ---------------- Statusseiten & Benutzer ---------------- */}
+        <AccessAdmin site={site} sites={sites} api={api} reloadSignal={reloadSignal} onError={setError} />
       </main>
     </div>
   );

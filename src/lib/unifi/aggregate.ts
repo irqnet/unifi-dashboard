@@ -4,7 +4,7 @@
  */
 import 'server-only';
 import { getConfig } from '../env';
-import { getSettings, listDeviceGroups, listGroups, listNetworkSettings } from '../db';
+import { getSettings, listDeviceGroups, listGroups, listNetworkSettings, type StatusPage } from '../db';
 import type {
   AdminDevice,
   AdminNetwork,
@@ -25,6 +25,25 @@ import type {
 } from '../views';
 import { clientRates, getPoller, type Sample } from './poller';
 import type { RawDevice, RawNetwork } from './types';
+
+const EMPTY_WAN: WanView = {
+  status: 'unknown',
+  ip: null,
+  isp: null,
+  latency: null,
+  xputDown: null,
+  xputUp: null,
+  down: 0,
+  up: 0,
+  history: [],
+  capacityDown: null,
+  capacityUp: null,
+  capacitySource: null,
+  activeWan: null,
+  expectedDown: null,
+  expectedUp: null,
+};
+const EMPTY_GATEWAY: GatewayView = { name: null, model: null, cpu: null, mem: null, uptime: null };
 
 const EXCLUDED_PURPOSES = new Set(['wan', 'remote-user-vpn', 'site-vpn', 'vpn-client', 'vpn-server']);
 const TOP_CLIENTS = 10;
@@ -119,7 +138,18 @@ export function findActiveWan(networks: RawNetwork[], gw: RawDevice | undefined,
   return byGroup('WAN') ?? wans[0];
 }
 
-export async function buildDashboard(site: string, isAdmin: boolean): Promise<DashboardPayload> {
+/**
+ * Einschränkung auf eine Statusseite: nur deren VLAN- und Geräte-Gruppen (auch im
+ * Hauptdashboard verborgene), keine nicht gruppierten Netze/Geräte, WAN optional.
+ */
+export interface DashboardScope {
+  page: StatusPage;
+  /** Weitere Statusseiten des Betrachters (für die Navigation) */
+  pages: { slug: string; title: string }[];
+  loggedIn: boolean;
+}
+
+export async function buildDashboard(site: string, isAdmin: boolean, scope?: DashboardScope): Promise<DashboardPayload> {
   const cfg = getConfig();
   const poller = getPoller();
   await poller.ensureStarted();
@@ -130,8 +160,12 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   const latest = samples[samples.length - 1];
   const mask = cfg.hideSensitiveIps && !isAdmin;
 
-  const settings = getSettings();
-  const groups = listGroups(site);
+  const settings = scope ? { ...getSettings(), showUngrouped: false, showUngroupedDevices: false } : getSettings();
+  const allGroups = listGroups(site);
+  const groups = scope
+    ? allGroups.filter((g) => scope.page.groupIds.includes(g.id)).map((g) => ({ ...g, hidden: false }))
+    : allGroups;
+  const scopeNets = scope ? new Set(groups.flatMap((g) => g.networkIds)) : null;
   const netSettings = listNetworkSettings(site);
   const deviceNames = new Map(data.devices.map((d) => [d.mac, d.name || d.model || d.mac]));
 
@@ -139,7 +173,7 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   const hiddenGroupNets = new Set(groups.filter((g) => g.hidden).flatMap((g) => g.networkIds));
   const anonGroupNets = new Set(groups.filter((g) => g.anonymizeClients).flatMap((g) => g.networkIds));
   const visibleNets = relevantNetworks(data.networks).filter(
-    (n) => !netSettings.get(n._id)?.hidden && !hiddenGroupNets.has(n._id),
+    (n) => !netSettings.get(n._id)?.hidden && !hiddenGroupNets.has(n._id) && (!scopeNets || scopeNets.has(n._id)),
   );
   const visibleIds = new Set(visibleNets.map((n) => n._id));
 
@@ -300,7 +334,7 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   const devGroupOf = new Map<string, (typeof devGroups)[number]>();
   devGroups.forEach((g) => g.deviceMacs.forEach((m) => devGroupOf.set(m, g)));
   const deviceGroups: DeviceGroupView[] = devGroups
-    .filter((g) => !g.hidden)
+    .filter((g) => (scope ? scope.page.deviceGroupIds.includes(g.id) : !g.hidden))
     .map((g) => ({
       id: String(g.id),
       name: g.name,
@@ -371,7 +405,53 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   };
 
   const allRows = Array.from(clientsByNet.values()).flat();
-  const allCounts = counts(data.clients.map((c) => ({ wired: !!c.is_wired }) as ClientRow));
+  const allCounts = scope ? counts(allRows) : counts(data.clients.map((c) => ({ wired: !!c.is_wired }) as ClientRow));
+
+  if (scope) {
+    // Status nur aus den Geräten (und ggf. dem WAN) der Statusseite ableiten
+    const scopedMacs = new Set([...visibleSwitches, ...visibleAps].map((d) => d.mac));
+    const scopedDevices = data.devices.filter((d) => scopedMacs.has(d.mac.toLowerCase()));
+    const scopedStatus: SystemStatus = st.error
+      ? 'offline'
+      : scope.page.showWan && wan.status === 'offline'
+        ? 'offline'
+        : scopedDevices.some((d) => d.adopted !== false && d.state !== undefined && d.state !== 1) ||
+            (scope.page.showWan && wan.status === 'degraded')
+          ? 'degraded'
+          : st.lastPoll
+            ? 'online'
+            : 'unknown';
+    return {
+      site,
+      sites: sites.filter((s) => s.name === site).map((s) => ({ name: s.name, desc: s.desc || s.name })),
+      generatedAt: Date.now(),
+      lastPoll: st.lastPoll,
+      error: st.error ? 'Verbindung zum Controller gestört' : null,
+      pollingIntervalMs: cfg.pollingIntervalMs,
+      isAdmin: false,
+      status: scopedStatus,
+      wan: scope.page.showWan ? wan : EMPTY_WAN,
+      gateway: scope.page.showWan ? gateway : EMPTY_GATEWAY,
+      totals: { ...allCounts, down: allRows.reduce((s, r) => s + r.down, 0), up: allRows.reduce((s, r) => s + r.up, 0) },
+      groups: groupViews,
+      networks,
+      ungrouped: [],
+      switches: visibleSwitches,
+      aps: visibleAps,
+      deviceGroups,
+      ungroupedSwitches: [],
+      ungroupedAps: [],
+      statusPage: {
+        slug: scope.page.slug,
+        title: scope.page.title,
+        description: scope.page.description,
+        showWan: scope.page.showWan,
+        isPublic: scope.page.isPublic,
+        loggedIn: scope.loggedIn,
+        pages: scope.pages,
+      },
+    };
+  }
 
   return {
     site,

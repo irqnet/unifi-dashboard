@@ -167,6 +167,20 @@ export interface DashboardPayload {
   /** IDs nicht gruppierter Switche/APs (leer, wenn im Admin-Bereich ausgeblendet) */
   ungroupedSwitches: string[];
   ungroupedAps: string[];
+  /** Gesetzt, wenn die Antwort auf eine Statusseite eingeschränkt ist */
+  statusPage?: StatusPageInfo;
+}
+
+export interface StatusPageInfo {
+  slug: string;
+  title: string;
+  description: string;
+  showWan: boolean;
+  isPublic: boolean;
+  /** Betrachter ist angemeldet (sonst öffentliche Ansicht ohne Login) */
+  loggedIn: boolean;
+  /** Alle Statusseiten, die der Betrachter sehen darf (Navigation) */
+  pages: { slug: string; title: string }[];
 }
 
 export interface DeviceGroupView {

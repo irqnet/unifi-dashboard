@@ -147,6 +147,45 @@ function migrate(db: Database.Database) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      display_name TEXT NOT NULL DEFAULT '',
+      password_hash TEXT NOT NULL,
+      is_admin INTEGER NOT NULL DEFAULT 0,
+      disabled INTEGER NOT NULL DEFAULT 0,
+      session_version INTEGER NOT NULL DEFAULT 1,
+      last_login_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS status_pages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      show_wan INTEGER NOT NULL DEFAULT 0,
+      is_public INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS status_page_groups (
+      page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
+      group_id INTEGER NOT NULL REFERENCES network_groups(id) ON DELETE CASCADE,
+      PRIMARY KEY (page_id, group_id)
+    );
+    CREATE TABLE IF NOT EXISTS status_page_device_groups (
+      page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
+      group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+      PRIMARY KEY (page_id, group_id)
+    );
+    CREATE TABLE IF NOT EXISTS user_pages (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
+      PRIMARY KEY (user_id, page_id)
+    );
   `);
   const row = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
   if (!row) db.prepare('INSERT INTO schema_version (version) VALUES (1)').run();
@@ -291,16 +330,18 @@ export function upsertNetworkSetting(s: NetworkSetting) {
 export interface AppSettings {
   showUngrouped: boolean;
   showUngroupedDevices: boolean;
+  /** Gemeinsamer Zugang (Gate ohne Benutzerkonto) darf die Gesamtansicht sehen */
+  allowSharedAccess: boolean;
 }
 
-const DEFAULT_SETTINGS: AppSettings = { showUngrouped: true, showUngroupedDevices: true };
+const BOOL_SETTINGS = ['showUngrouped', 'showUngroupedDevices', 'allowSharedAccess'] as const;
+const DEFAULT_SETTINGS: AppSettings = { showUngrouped: true, showUngroupedDevices: true, allowSharedAccess: true };
 
 export function getSettings(): AppSettings {
   const rows = getDb().prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
   const out: AppSettings = { ...DEFAULT_SETTINGS };
   for (const r of rows) {
-    if (r.key === 'showUngrouped') out.showUngrouped = r.value === 'true';
-    if (r.key === 'showUngroupedDevices') out.showUngroupedDevices = r.value === 'true';
+    if ((BOOL_SETTINGS as readonly string[]).includes(r.key)) out[r.key as (typeof BOOL_SETTINGS)[number]] = r.value === 'true';
   }
   return out;
 }
@@ -309,8 +350,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const stmt = getDb().prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   );
-  if (patch.showUngrouped !== undefined) stmt.run('showUngrouped', String(patch.showUngrouped));
-  if (patch.showUngroupedDevices !== undefined) stmt.run('showUngroupedDevices', String(patch.showUngroupedDevices));
+  for (const key of BOOL_SETTINGS) if (patch[key] !== undefined) stmt.run(key, String(patch[key]));
   return getSettings();
 }
 
@@ -417,4 +457,265 @@ export function reorderDeviceGroups(site: string, ids: number[]) {
   const db = getDb();
   const stmt = db.prepare('UPDATE device_groups SET sort_order = ? WHERE id = ? AND site = ?');
   db.transaction(() => ids.forEach((id, idx) => stmt.run(idx, id, site)))();
+}
+
+// --- Benutzer -------------------------------------------------------------------
+export interface User {
+  id: number;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+  disabled: boolean;
+  sessionVersion: number;
+  lastLoginAt: string | null;
+  createdAt: string;
+  pageIds: number[];
+}
+
+interface UserRow {
+  id: number;
+  username: string;
+  display_name: string;
+  password_hash: string;
+  is_admin: number;
+  disabled: number;
+  session_version: number;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+function toUser(r: UserRow, pageIds: number[]): User {
+  return {
+    id: r.id,
+    username: r.username,
+    displayName: r.display_name,
+    isAdmin: !!r.is_admin,
+    disabled: !!r.disabled,
+    sessionVersion: r.session_version,
+    lastLoginAt: r.last_login_at,
+    createdAt: r.created_at,
+    pageIds,
+  };
+}
+
+function userPageIds(userId: number): number[] {
+  return (getDb().prepare('SELECT page_id FROM user_pages WHERE user_id = ?').all(userId) as { page_id: number }[]).map(
+    (r) => r.page_id,
+  );
+}
+
+export function listUsers(): User[] {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM users ORDER BY username COLLATE NOCASE').all() as UserRow[];
+  const links = db.prepare('SELECT user_id, page_id FROM user_pages').all() as { user_id: number; page_id: number }[];
+  return rows.map((r) => toUser(r, links.filter((l) => l.user_id === r.id).map((l) => l.page_id)));
+}
+
+export function getUser(id: number): User | null {
+  const r = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
+  return r ? toUser(r, userPageIds(r.id)) : null;
+}
+
+/** Liefert Benutzer + Passwort-Hash für den Login (Benutzername ohne Groß-/Kleinschreibung). */
+export function findUserForLogin(username: string): { user: User; passwordHash: string } | null {
+  const r = getDb().prepare('SELECT * FROM users WHERE username = ?').get(username) as UserRow | undefined;
+  return r ? { user: toUser(r, userPageIds(r.id)), passwordHash: r.password_hash } : null;
+}
+
+export function touchUserLogin(id: number) {
+  getDb().prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(id);
+}
+
+export interface UserInput {
+  username?: string;
+  displayName?: string;
+  passwordHash?: string;
+  isAdmin?: boolean;
+  disabled?: boolean;
+  pageIds?: number[];
+}
+
+function setUserPages(db: Database.Database, userId: number, pageIds: number[]) {
+  db.prepare('DELETE FROM user_pages WHERE user_id = ?').run(userId);
+  const ins = db.prepare('INSERT OR IGNORE INTO user_pages (user_id, page_id) SELECT ?, id FROM status_pages WHERE id = ?');
+  for (const id of Array.from(new Set(pageIds))) ins.run(userId, id);
+}
+
+export function createUser(input: Required<Pick<UserInput, 'username' | 'passwordHash'>> & UserInput): User {
+  const db = getDb();
+  const id = db.transaction(() => {
+    const res = db
+      .prepare('INSERT INTO users (username, display_name, password_hash, is_admin, disabled) VALUES (?, ?, ?, ?, ?)')
+      .run(input.username, input.displayName ?? '', input.passwordHash, input.isAdmin ? 1 : 0, input.disabled ? 1 : 0);
+    const newId = Number(res.lastInsertRowid);
+    setUserPages(db, newId, input.pageIds ?? []);
+    return newId;
+  })();
+  return getUser(id)!;
+}
+
+export function updateUser(id: number, input: UserInput): User | null {
+  const db = getDb();
+  const ex = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
+  if (!ex) return null;
+  // Passwortwechsel, Sperre oder Rollenwechsel beenden bestehende Sitzungen
+  const bump =
+    input.passwordHash !== undefined ||
+    (input.disabled !== undefined && input.disabled !== !!ex.disabled) ||
+    (input.isAdmin !== undefined && input.isAdmin !== !!ex.is_admin);
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE users SET username = ?, display_name = ?, password_hash = ?, is_admin = ?, disabled = ?,
+         session_version = session_version + ?, updated_at = datetime('now') WHERE id = ?`,
+    ).run(
+      input.username ?? ex.username,
+      input.displayName ?? ex.display_name,
+      input.passwordHash ?? ex.password_hash,
+      input.isAdmin === undefined ? ex.is_admin : input.isAdmin ? 1 : 0,
+      input.disabled === undefined ? ex.disabled : input.disabled ? 1 : 0,
+      bump ? 1 : 0,
+      id,
+    );
+    if (input.pageIds) setUserPages(db, id, input.pageIds);
+  })();
+  return getUser(id);
+}
+
+export function deleteUser(id: number): boolean {
+  return getDb().prepare('DELETE FROM users WHERE id = ?').run(id).changes > 0;
+}
+
+export function countActiveAdmins(): number {
+  return (getDb().prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND disabled = 0').get() as { n: number }).n;
+}
+
+// --- Statusseiten ----------------------------------------------------------------
+export interface StatusPage {
+  id: number;
+  site: string;
+  slug: string;
+  title: string;
+  description: string;
+  showWan: boolean;
+  isPublic: boolean;
+  sortOrder: number;
+  groupIds: number[];
+  deviceGroupIds: number[];
+}
+
+export interface StatusPageInput {
+  site?: string;
+  slug?: string;
+  title?: string;
+  description?: string;
+  showWan?: boolean;
+  isPublic?: boolean;
+  groupIds?: number[];
+  deviceGroupIds?: number[];
+}
+
+interface StatusPageRow {
+  id: number;
+  site: string;
+  slug: string;
+  title: string;
+  description: string;
+  show_wan: number;
+  is_public: number;
+  sort_order: number;
+}
+
+function loadPages(where: string, ...args: unknown[]): StatusPage[] {
+  const db = getDb();
+  const rows = db.prepare(`SELECT * FROM status_pages ${where} ORDER BY sort_order ASC, title COLLATE NOCASE`).all(...args) as StatusPageRow[];
+  if (!rows.length) return [];
+  const ng = db.prepare('SELECT page_id, group_id FROM status_page_groups').all() as { page_id: number; group_id: number }[];
+  const dg = db.prepare('SELECT page_id, group_id FROM status_page_device_groups').all() as { page_id: number; group_id: number }[];
+  return rows.map((r) => ({
+    id: r.id,
+    site: r.site,
+    slug: r.slug,
+    title: r.title,
+    description: r.description,
+    showWan: !!r.show_wan,
+    isPublic: !!r.is_public,
+    sortOrder: r.sort_order,
+    groupIds: ng.filter((x) => x.page_id === r.id).map((x) => x.group_id),
+    deviceGroupIds: dg.filter((x) => x.page_id === r.id).map((x) => x.group_id),
+  }));
+}
+
+export function listStatusPages(): StatusPage[] {
+  return loadPages('');
+}
+
+export function getStatusPage(id: number): StatusPage | null {
+  return loadPages('WHERE id = ?', id)[0] ?? null;
+}
+
+export function getStatusPageBySlug(slug: string): StatusPage | null {
+  return loadPages('WHERE slug = ?', slug)[0] ?? null;
+}
+
+export function listStatusPagesForUser(userId: number): StatusPage[] {
+  return loadPages('WHERE id IN (SELECT page_id FROM user_pages WHERE user_id = ?)', userId);
+}
+
+function setPageMembers(db: Database.Database, pageId: number, site: string, input: StatusPageInput) {
+  // Nur Gruppen derselben Site übernehmen
+  if (input.groupIds) {
+    db.prepare('DELETE FROM status_page_groups WHERE page_id = ?').run(pageId);
+    const ins = db.prepare('INSERT OR IGNORE INTO status_page_groups (page_id, group_id) SELECT ?, id FROM network_groups WHERE id = ? AND site = ?');
+    for (const id of Array.from(new Set(input.groupIds))) ins.run(pageId, id, site);
+  }
+  if (input.deviceGroupIds) {
+    db.prepare('DELETE FROM status_page_device_groups WHERE page_id = ?').run(pageId);
+    const ins = db.prepare(
+      'INSERT OR IGNORE INTO status_page_device_groups (page_id, group_id) SELECT ?, id FROM device_groups WHERE id = ? AND site = ?',
+    );
+    for (const id of Array.from(new Set(input.deviceGroupIds))) ins.run(pageId, id, site);
+  }
+}
+
+export function createStatusPage(input: Required<Pick<StatusPageInput, 'site' | 'slug' | 'title'>> & StatusPageInput): StatusPage {
+  const db = getDb();
+  const id = db.transaction(() => {
+    const max = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM status_pages').get() as { m: number };
+    const res = db
+      .prepare('INSERT INTO status_pages (site, slug, title, description, show_wan, is_public, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(input.site, input.slug, input.title, input.description ?? '', input.showWan ? 1 : 0, input.isPublic ? 1 : 0, max.m + 1);
+    const newId = Number(res.lastInsertRowid);
+    setPageMembers(db, newId, input.site, input);
+    return newId;
+  })();
+  return getStatusPage(id)!;
+}
+
+export function updateStatusPage(id: number, input: StatusPageInput): StatusPage | null {
+  const db = getDb();
+  const ex = db.prepare('SELECT * FROM status_pages WHERE id = ?').get(id) as StatusPageRow | undefined;
+  if (!ex) return null;
+  const site = input.site ?? ex.site;
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE status_pages SET site = ?, slug = ?, title = ?, description = ?, show_wan = ?, is_public = ?,
+         updated_at = datetime('now') WHERE id = ?`,
+    ).run(
+      site,
+      input.slug ?? ex.slug,
+      input.title ?? ex.title,
+      input.description ?? ex.description,
+      input.showWan === undefined ? ex.show_wan : input.showWan ? 1 : 0,
+      input.isPublic === undefined ? ex.is_public : input.isPublic ? 1 : 0,
+      id,
+    );
+    // Bei Site-Wechsel passen die alten Gruppen nicht mehr
+    const members = site !== ex.site ? { groupIds: input.groupIds ?? [], deviceGroupIds: input.deviceGroupIds ?? [] } : input;
+    setPageMembers(db, id, site, members);
+  })();
+  return getStatusPage(id);
+}
+
+export function deleteStatusPage(id: number): boolean {
+  return getDb().prepare('DELETE FROM status_pages WHERE id = ?').run(id).changes > 0;
 }
