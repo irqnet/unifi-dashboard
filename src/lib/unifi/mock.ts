@@ -62,7 +62,25 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
   const live = seeded(Math.floor(now / 1000) + base);
   const wave = (phase: number) => 0.6 + 0.4 * Math.sin(now / 45_000 + phase);
 
-  const netList = (site === 'default' ? NETS : NETS.slice(0, 4)).map((n, i) => ({ ...n, _id: net(i, site), enabled: true }));
+  const netList: RawNetwork[] = (site === 'default' ? NETS : NETS.slice(0, 4)).map((n, i) => ({ ...n, _id: net(i, site), enabled: true }));
+  netList.push(
+    {
+      _id: `${site}-wan1`,
+      name: 'Internet 1',
+      purpose: 'wan',
+      wan_networkgroup: 'WAN',
+      enabled: true,
+      wan_provider_capabilities: { download_kilobits_per_second: 1_000_000, upload_kilobits_per_second: 500_000 },
+    },
+    {
+      _id: `${site}-wan2`,
+      name: 'LTE Backup',
+      purpose: 'wan',
+      wan_networkgroup: 'WAN2',
+      enabled: true,
+      wan_provider_capabilities: { download_kilobits_per_second: 150_000, upload_kilobits_per_second: 50_000 },
+    },
+  );
 
   const devices: RawDevice[] = [];
   const gwMac = `aa:00:00:${base}0:00:01`;
@@ -77,6 +95,9 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
     uptime: 1_234_567 + Math.floor(now / 1000) % 100000,
     state: 1,
     'system-stats': { cpu: (12 + live() * 20).toFixed(1), mem: (48 + live() * 8).toFixed(1) },
+    uplink: { name: 'eth8', comment: 'WAN' },
+    wan1: { ip: site === 'default' ? '203.0.113.42' : '198.51.100.7', up: true },
+    wan2: { ip: '100.64.12.9', up: true },
   });
 
   const switches = site === 'default' ? 2 : 1;

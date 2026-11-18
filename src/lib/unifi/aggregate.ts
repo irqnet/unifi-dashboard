@@ -93,6 +93,32 @@ function overallStatus(error: string | null, health: { subsystem: string; status
   return health.length ? 'online' : 'unknown';
 }
 
+/**
+ * Ermittelt das aktuell aktive WAN-Netzwerk (für Failover/Multi-WAN):
+ * 1. Uplink des Gateways (uplink.comment/name = WAN, WAN2 …)
+ * 2. WAN-IP aus stat/health passend zu wan1/wan2 des Gateways
+ * 3. sonst das primäre WAN (wan_networkgroup = WAN)
+ */
+export function findActiveWan(networks: RawNetwork[], gw: RawDevice | undefined, wanIp: string | null): RawNetwork | undefined {
+  const wans = networks.filter((n) => n.purpose === 'wan' && n.enabled !== false);
+  if (!wans.length) return undefined;
+  const byGroup = (g: string | undefined) => (g ? wans.find((n) => (n.wan_networkgroup ?? 'WAN').toUpperCase() === g.toUpperCase()) : undefined);
+  const uplinkGroup = [gw?.uplink?.comment, gw?.uplink?.name].find((v) => v && /^WAN\d*$/i.test(v));
+  const fromUplink = byGroup(uplinkGroup);
+  if (fromUplink) return fromUplink;
+  if (wanIp && gw) {
+    if (gw.wan2?.ip === wanIp || (gw.wan2?.up && gw.wan1?.up === false)) {
+      const w2 = byGroup('WAN2');
+      if (w2) return w2;
+    }
+    if (gw.wan1?.ip === wanIp) {
+      const w1 = byGroup('WAN');
+      if (w1) return w1;
+    }
+  }
+  return byGroup('WAN') ?? wans[0];
+}
+
 export async function buildDashboard(site: string, isAdmin: boolean): Promise<DashboardPayload> {
   const cfg = getConfig();
   const poller = getPoller();
@@ -303,8 +329,16 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   const xu = num(wwwH?.xput_up);
   const peakDown = Math.max(0, ...samples.map((x) => x.wanDown));
   const peakUp = Math.max(0, ...samples.map((x) => x.wanUp));
+  const activeWanNet = findActiveWan(data.networks, gwDev, wanIp);
+  const caps = activeWanNet?.wan_provider_capabilities;
+  const expDown = num(caps?.download_kilobits_per_second);
+  const expUp = num(caps?.upload_kilobits_per_second);
+  const expectedDown = expDown && expDown > 0 ? expDown * 1000 : null;
+  const expectedUp = expUp && expUp > 0 ? expUp * 1000 : null;
   const [capacityDown, capacityUp, capacitySource]: [number | null, number | null, WanView['capacitySource']] =
-    cfg.wanDownMbps > 0
+    expectedDown
+      ? [expectedDown, expectedUp ?? expectedDown, 'isp']
+      : cfg.wanDownMbps > 0
       ? [cfg.wanDownMbps * 1e6, (cfg.wanUpMbps || cfg.wanDownMbps) * 1e6, 'config']
       : xd && xd > 0
         ? [xd * 1e6, (xu && xu > 0 ? xu : xd) * 1e6, 'speedtest']
@@ -324,6 +358,9 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
     capacityDown,
     capacityUp,
     capacitySource,
+    activeWan: activeWanNet ? activeWanNet.name || activeWanNet.wan_networkgroup || 'WAN' : null,
+    expectedDown,
+    expectedUp,
   };
   const gateway: GatewayView = {
     name: gwDev?.name ?? wanH?.gw_name ?? null,

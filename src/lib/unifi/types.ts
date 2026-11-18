@@ -77,8 +77,9 @@ export interface RawDevice {
   'rx_bytes-r'?: number;
   'tx_bytes-r'?: number;
   'bytes-r'?: number;
-  uplink?: { 'rx_bytes-r'?: number; 'tx_bytes-r'?: number; speed?: number; type?: string };
-  wan1?: { ip?: string; up?: boolean };
+  uplink?: { 'rx_bytes-r'?: number; 'tx_bytes-r'?: number; speed?: number; type?: string; name?: string; comment?: string; ip?: string };
+  wan1?: { ip?: string; up?: boolean; name?: string; ifname?: string };
+  wan2?: { ip?: string; up?: boolean; name?: string; ifname?: string };
 }
 
 export interface RawClient {
@@ -113,6 +114,10 @@ export interface RawNetwork {
   ip_subnet?: string;
   enabled?: boolean;
   networkgroup?: string;
+  /** WAN-Netzwerke: WAN, WAN2, … */
+  wan_networkgroup?: string;
+  /** „Expected ISP Speeds“ aus den WAN-Einstellungen */
+  wan_provider_capabilities?: { download_kilobits_per_second?: number; upload_kilobits_per_second?: number };
 }
 
 export interface RawHealth {

@@ -5,7 +5,9 @@ import { formatBps, formatMbps } from '@/lib/format';
 import type { DashboardPayload } from '@/lib/views';
 import { TrafficChart } from './TrafficChart';
 
-const SOURCE_LABEL = { config: 'gebuchte Bandbreite', speedtest: 'letzter Speedtest', peak: 'Spitzenwert im Verlauf' } as const;
+const SOURCE_LABEL = { isp: 'Expected ISP Speeds des aktiven WAN', config: 'gebuchte Bandbreite', speedtest: 'letzter Speedtest', peak: 'Spitzenwert im Verlauf' } as const;
+
+const mbit = (bps: number) => `${Math.round(bps / 1e6).toLocaleString('de-DE')} Mbit/s`;
 
 function utilColor(pct: number) {
   if (pct >= 90) return '#f43f5e';
@@ -104,9 +106,25 @@ export function WanPanel({ data }: { data: DashboardPayload }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[auto,1fr]">
-        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col xl:flex-row">
-          <BandwidthGauge label="Download" icon={<ArrowDown className="h-3.5 w-3.5" />} value={wan.down} capacity={wan.capacityDown} color="#38bdf8" />
-          <BandwidthGauge label="Upload" icon={<ArrowUp className="h-3.5 w-3.5" />} value={wan.up} capacity={wan.capacityUp} color="#a78bfa" />
+        <div className="flex flex-col items-center justify-center gap-4">
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col xl:flex-row">
+            <BandwidthGauge label="Download" icon={<ArrowDown className="h-3.5 w-3.5" />} value={wan.down} capacity={wan.capacityDown} color="#38bdf8" />
+            <BandwidthGauge label="Upload" icon={<ArrowUp className="h-3.5 w-3.5" />} value={wan.up} capacity={wan.capacityUp} color="#a78bfa" />
+          </div>
+          <div className="w-full rounded-lg border border-noc-line bg-noc-bg/60 px-3 py-2 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-noc-muted">
+              Expected ISP Speed{wan.activeWan ? ` · ${wan.activeWan}` : ''}
+            </div>
+            {wan.expectedDown ? (
+              <div className="font-mono text-sm tabular-nums">
+                <span className="text-sky-300">↓ {mbit(wan.expectedDown)}</span>
+                <span className="mx-2 text-noc-muted">/</span>
+                <span className="text-violet-300">↑ {wan.expectedUp ? mbit(wan.expectedUp) : '–'}</span>
+              </div>
+            ) : (
+              <div className="text-xs text-noc-muted">In UniFi nicht hinterlegt (WAN-Einstellungen → Expected ISP Speeds)</div>
+            )}
+          </div>
         </div>
         <div className="min-w-0">
           <TrafficChart id="wan" data={h} height={230} />
