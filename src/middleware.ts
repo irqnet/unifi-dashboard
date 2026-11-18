@@ -1,7 +1,7 @@
 /**
  * Zwei-Stufen-Zugriffsschutz:
  *  - "/" und "/api/unifi/*"         → Rolle viewer oder admin (sonst Gate-Seite bzw. 401)
- *  - "/admin" und "/api/admin/*"    → ausschließlich Rolle admin (sonst Admin-Login bzw. 401/403)
+ *  - "/admin", "/vouchers" und "/api/admin/*" → ausschließlich Rolle admin (sonst Admin-Login bzw. 401/403)
  *  - öffentlich: /gate, /api/auth/verify, /api/health, statische Assets
  */
 import { NextResponse, type NextRequest } from 'next/server';
@@ -46,7 +46,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const adminOnly = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/api/admin');
+  const adminOnly =
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname.startsWith('/api/admin') ||
+    pathname === '/vouchers' ||
+    pathname.startsWith('/vouchers/');
   if (adminOnly && session.role !== 'admin') {
     if (isApi) return NextResponse.json({ error: 'Admin-Rechte erforderlich' }, { status: 403 });
     return showPage(req, '/admin/login');

@@ -8,7 +8,7 @@
 import 'server-only';
 import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici';
 import { getConfig } from '../env';
-import type { RawClient, RawDevice, RawHealth, RawNetwork, RawSite, SiteRawData, UniFiEnvelope } from './types';
+import type { RawClient, RawDevice, RawGuest, RawHealth, RawNetwork, RawSite, RawVoucher, SiteRawData, UniFiEnvelope } from './types';
 
 type Flavor = 'unifios' | 'classic';
 
@@ -176,6 +176,64 @@ export class UniFiClient {
     if (Array.isArray(json)) return json;
     if (json.meta?.rc === 'error') throw new UniFiError(`UniFi-API ${path}: ${json.meta.msg ?? 'Fehler'}`);
     return json.data ?? [];
+  }
+
+  /** POST auf einen Network-API-Pfad (z. B. cmd/hotspot), automatischer Re-Login bei 401. */
+  async post<T>(path: string, body: unknown, retry = true): Promise<T[]> {
+    await this.ensureLogin();
+    const res = await this.raw(this.prefix() + path, { method: 'POST', body });
+    if ((res.status === 401 || res.status === 403) && retry && !this.cfg.apiKey) {
+      await res.text().catch(() => '');
+      this.cookies.clear();
+      return this.post<T>(path, body, false);
+    }
+    const text = await res.text().catch(() => '');
+    if (!res.ok) {
+      let msg = '';
+      try {
+        msg = (JSON.parse(text) as UniFiEnvelope<T>).meta?.msg ?? '';
+      } catch {
+        /* ignore */
+      }
+      const hint = res.status === 403 ? ' – hat der UniFi-Benutzer/API-Key Schreibrechte (Hotspot-Verwaltung)?' : '';
+      throw new UniFiError(`UniFi-API ${path}: HTTP ${res.status}${msg ? ` (${msg})` : ''}${hint}`, res.status);
+    }
+    const json = parseUniFiJson<UniFiEnvelope<T> | T[]>(text || '{}', path);
+    if (Array.isArray(json)) return json;
+    if (json.meta?.rc === 'error') throw new UniFiError(`UniFi-API ${path}: ${json.meta.msg ?? 'Fehler'}`);
+    return json.data ?? [];
+  }
+
+  vouchers(site: string) {
+    return this.get<RawVoucher>(`/api/s/${encodeURIComponent(site)}/stat/voucher`);
+  }
+
+  guests(site: string, withinHours = 24 * 7) {
+    return this.get<RawGuest>(`/api/s/${encodeURIComponent(site)}/stat/guest?within=${withinHours}`);
+  }
+
+  /** Erstellt Voucher; liefert die create_time, über die die neuen Codes gefunden werden. */
+  createVouchers(
+    site: string,
+    opts: { count: number; minutes: number; quota: number; note?: string; up?: number; down?: number; megabytes?: number },
+  ) {
+    const body: Record<string, unknown> = {
+      cmd: 'create-voucher',
+      n: opts.count,
+      quota: opts.quota,
+      expire: opts.minutes,
+      expire_number: opts.minutes,
+      expire_unit: 1,
+    };
+    if (opts.note) body.note = opts.note;
+    if (opts.up) body.up = opts.up;
+    if (opts.down) body.down = opts.down;
+    if (opts.megabytes) body.bytes = opts.megabytes;
+    return this.post<{ create_time: number }>(`/api/s/${encodeURIComponent(site)}/cmd/hotspot`, body);
+  }
+
+  deleteVoucher(site: string, id: string) {
+    return this.post(`/api/s/${encodeURIComponent(site)}/cmd/hotspot`, { cmd: 'delete-voucher', _id: id });
   }
 
   sites() {

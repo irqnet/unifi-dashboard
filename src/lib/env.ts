@@ -47,6 +47,18 @@ export function getConfig() {
     wanDownMbps: int('WAN_BANDWIDTH_DOWN_MBPS', 0),
     wanUpMbps: int('WAN_BANDWIDTH_UP_MBPS', 0),
     dataDir: str('DATA_DIR', './data'),
+    vouchers: {
+      /** Vorlagen: "Name=Minuten,Nutzungen,Upload kbps,Download kbps,MB;…" (Name optional) */
+      presets: str('VOUCHER_PRESETS', 'Tagespass=1440,1,,,;Wochenende=4320,1,,,;Woche (3 Geräte)=10080,3,,,'),
+      /** SSID des Gäste-WLANs – erscheint auf dem Ausdruck und im QR-Code */
+      ssid: str('VOUCHER_WIFI_SSID'),
+      /** WPA-Passwort des Gäste-WLANs (leer = offenes Netz mit Hotspot-Portal) */
+      wifiPassword: str('VOUCHER_WIFI_PASSWORD'),
+      /** Notiz beim Erstellen verpflichtend */
+      noteRequired: bool('VOUCHER_NOTE_REQUIRED', false),
+      /** Maximale Anzahl Voucher pro Erstellvorgang */
+      maxBatch: int('VOUCHER_MAX_BATCH', 100, 1),
+    },
   };
 }
 

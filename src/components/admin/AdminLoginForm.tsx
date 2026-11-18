@@ -19,7 +19,9 @@ export function AdminLoginForm() {
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        window.location.assign('/admin');
+        // Bei per Rewrite angezeigtem Login (z. B. /vouchers) auf die ursprünglich angefragte Seite zurück
+        const { pathname, search } = window.location;
+        window.location.assign(pathname === '/admin/login' ? '/admin' : pathname + search);
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };
