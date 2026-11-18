@@ -123,7 +123,7 @@ export function ApCard({ ap }: { ap: ApView }) {
             <div>
               <Meter value={r.utilization} warn={50} crit={75} />
             </div>
-            <span className="w-28 text-right font-mono text-noc-muted">
+            <span className="w-32 whitespace-nowrap text-right font-mono text-noc-muted">
               {r.utilization !== null ? `${r.utilization}%` : '–'} · Ch {r.channel ?? '–'} · {r.clients}
             </span>
           </div>

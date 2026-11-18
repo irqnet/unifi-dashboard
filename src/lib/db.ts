@@ -124,6 +124,25 @@ function migrate(db: Database.Database) {
       anonymize_clients INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (site, network_id)
     );
+    CREATE TABLE IF NOT EXISTS device_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      color TEXT NOT NULL DEFAULT '#38bdf8',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_device_groups_site ON device_groups(site, sort_order);
+    CREATE TABLE IF NOT EXISTS device_group_members (
+      group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+      site TEXT NOT NULL,
+      device_mac TEXT NOT NULL,
+      PRIMARY KEY (group_id, device_mac),
+      UNIQUE (site, device_mac)
+    );
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -271,15 +290,17 @@ export function upsertNetworkSetting(s: NetworkSetting) {
 // --- Globale Einstellungen ----------------------------------------------------
 export interface AppSettings {
   showUngrouped: boolean;
+  showUngroupedDevices: boolean;
 }
 
-const DEFAULT_SETTINGS: AppSettings = { showUngrouped: true };
+const DEFAULT_SETTINGS: AppSettings = { showUngrouped: true, showUngroupedDevices: true };
 
 export function getSettings(): AppSettings {
   const rows = getDb().prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
   const out: AppSettings = { ...DEFAULT_SETTINGS };
   for (const r of rows) {
     if (r.key === 'showUngrouped') out.showUngrouped = r.value === 'true';
+    if (r.key === 'showUngroupedDevices') out.showUngroupedDevices = r.value === 'true';
   }
   return out;
 }
@@ -289,5 +310,111 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   );
   if (patch.showUngrouped !== undefined) stmt.run('showUngrouped', String(patch.showUngrouped));
+  if (patch.showUngroupedDevices !== undefined) stmt.run('showUngroupedDevices', String(patch.showUngroupedDevices));
   return getSettings();
+}
+
+// --- Geräte-Gruppen (Switche & Access Points) ---------------------------------
+export interface DeviceGroup {
+  id: number;
+  site: string;
+  name: string;
+  description: string;
+  color: string;
+  sortOrder: number;
+  hidden: boolean;
+  deviceMacs: string[];
+}
+
+export interface DeviceGroupInput {
+  name: string;
+  description?: string;
+  color?: string;
+  hidden?: boolean;
+  deviceMacs?: string[];
+}
+
+interface DeviceGroupRow {
+  id: number;
+  site: string;
+  name: string;
+  description: string;
+  color: string;
+  sort_order: number;
+  hidden: number;
+}
+
+export function listDeviceGroups(site: string): DeviceGroup[] {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT * FROM device_groups WHERE site = ? ORDER BY sort_order ASC, id ASC')
+    .all(site) as DeviceGroupRow[];
+  const members = db
+    .prepare('SELECT group_id, device_mac FROM device_group_members WHERE site = ?')
+    .all(site) as { group_id: number; device_mac: string }[];
+  const byGroup = new Map<number, string[]>();
+  for (const m of members) byGroup.set(m.group_id, [...(byGroup.get(m.group_id) ?? []), m.device_mac]);
+  return rows.map((r) => ({
+    id: r.id,
+    site: r.site,
+    name: r.name,
+    description: r.description,
+    color: r.color,
+    sortOrder: r.sort_order,
+    hidden: !!r.hidden,
+    deviceMacs: byGroup.get(r.id) ?? [],
+  }));
+}
+
+function setDeviceMembers(db: Database.Database, groupId: number, site: string, macs: string[]) {
+  db.prepare('DELETE FROM device_group_members WHERE group_id = ?').run(groupId);
+  const del = db.prepare('DELETE FROM device_group_members WHERE site = ? AND device_mac = ?');
+  const ins = db.prepare('INSERT INTO device_group_members (group_id, site, device_mac) VALUES (?, ?, ?)');
+  for (const mac of Array.from(new Set(macs.map((m) => m.toLowerCase())))) {
+    del.run(site, mac);
+    ins.run(groupId, site, mac);
+  }
+}
+
+export function createDeviceGroup(site: string, input: DeviceGroupInput): DeviceGroup {
+  const db = getDb();
+  const id = db.transaction(() => {
+    const max = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM device_groups WHERE site = ?').get(site) as { m: number };
+    const res = db
+      .prepare('INSERT INTO device_groups (site, name, description, color, sort_order, hidden) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(site, input.name, input.description ?? '', input.color ?? '#38bdf8', max.m + 1, input.hidden ? 1 : 0);
+    const newId = Number(res.lastInsertRowid);
+    setDeviceMembers(db, newId, site, input.deviceMacs ?? []);
+    return newId;
+  })();
+  return listDeviceGroups(site).find((g) => g.id === id)!;
+}
+
+export function updateDeviceGroup(id: number, input: Partial<DeviceGroupInput>): DeviceGroup | null {
+  const db = getDb();
+  const ex = db.prepare('SELECT * FROM device_groups WHERE id = ?').get(id) as DeviceGroupRow | undefined;
+  if (!ex) return null;
+  db.transaction(() => {
+    db.prepare(
+      "UPDATE device_groups SET name = ?, description = ?, color = ?, hidden = ?, updated_at = datetime('now') WHERE id = ?",
+    ).run(
+      input.name ?? ex.name,
+      input.description ?? ex.description,
+      input.color ?? ex.color,
+      input.hidden === undefined ? ex.hidden : input.hidden ? 1 : 0,
+      id,
+    );
+    if (input.deviceMacs) setDeviceMembers(db, id, ex.site, input.deviceMacs);
+  })();
+  return listDeviceGroups(ex.site).find((g) => g.id === id) ?? null;
+}
+
+export function deleteDeviceGroup(id: number): boolean {
+  return getDb().prepare('DELETE FROM device_groups WHERE id = ?').run(id).changes > 0;
+}
+
+export function reorderDeviceGroups(site: string, ids: number[]) {
+  const db = getDb();
+  const stmt = db.prepare('UPDATE device_groups SET sort_order = ? WHERE id = ? AND site = ?');
+  db.transaction(() => ids.forEach((id, idx) => stmt.run(idx, id, site)))();
 }

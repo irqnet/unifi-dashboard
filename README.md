@@ -82,6 +82,8 @@ Für Tests ohne echte Keys bietet Cloudflare Dummy-Keys an (Site `1x000000000000
 6. **Datenschutz:** *Anonymisieren* ersetzt Hostnamen/IP/MAC der Clients (z. B. Gäste-VLAN) durch „Client n“. *Sichtbar* aus blendet die Gruppe von der Statusseite aus.
 7. **Netzwerk-Tabelle:** Einzelne VLANs komplett ausblenden oder anonymisieren; Schalter *„Nicht gruppierte VLANs auf Statusseite anzeigen“* steuert, ob ungruppierte Netzwerke als Einzelkarten erscheinen.
 
+8. **Geräte-Gruppen (Switche & Access Points):** Unter *Neue Geräte-Gruppe* Switche und APs (Name · Modell · MAC, mit Filter) zu Gruppen wie „Rack Keller“ oder „Außenbereich“ zusammenfassen. Die Zuordnung erfolgt über die MAC-Adresse und bleibt bei Umbenennungen erhalten. Gruppen lassen sich sortieren und ausblenden; nicht gruppierte Geräte erscheinen darunter als „Weitere Switche“ / „Weitere Access Points“ (abschaltbar).
+
 Alle Einstellungen liegen in `data/dashboard.db` (SQLite, WAL-Modus). Ist das Verzeichnis nicht beschreibbar, läuft das Dashboard mit einer In-Memory-Datenbank weiter, der Admin-Bereich zeigt eine Warnung und das Log nennt Pfad und UID.
 
 ## Lokales Deployment mit Podman
@@ -177,4 +179,8 @@ npm run typecheck
 | `GET` / `POST` | `/api/admin/groups` | admin | Gruppen lesen/anlegen |
 | `PUT` / `DELETE` | `/api/admin/groups/:id` | admin | Gruppe ändern/löschen |
 | `PUT` | `/api/admin/groups/order` | admin | Reihenfolge setzen |
+| `GET` | `/api/admin/devices` | admin | Live-Switche/APs inkl. Gruppenzuordnung |
+| `GET` / `POST` | `/api/admin/device-groups` | admin | Geräte-Gruppen lesen/anlegen |
+| `PUT` / `DELETE` | `/api/admin/device-groups/:id` | admin | Geräte-Gruppe ändern/löschen |
+| `PUT` | `/api/admin/device-groups/order` | admin | Reihenfolge der Geräte-Gruppen |
 | `GET` / `PUT` | `/api/admin/settings` | admin | Globale Einstellungen |
