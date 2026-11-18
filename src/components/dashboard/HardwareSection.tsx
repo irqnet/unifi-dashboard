@@ -34,7 +34,13 @@ export function HardwareSection({ data }: { data: DashboardPayload }) {
   const ungroupedSw = data.ungroupedSwitches.map((id) => swById.get(id)).filter((x): x is SwitchView => !!x);
   const ungroupedAp = data.ungroupedAps.map((id) => apById.get(id)).filter((x): x is ApView => !!x);
   const hasGroups = data.deviceGroups.length > 0;
-  if (!hasGroups && !ungroupedSw.length && !ungroupedAp.length) return null;
+  if (!hasGroups && !ungroupedSw.length && !ungroupedAp.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-noc-line p-8 text-center text-sm text-noc-muted">
+        Keine Switche oder Access Points zur Anzeige. Prüfe im Admin-Bereich die Geräte-Gruppen und die Option für nicht gruppierte Geräte.
+      </div>
+    );
+  }
 
   return (
     <>

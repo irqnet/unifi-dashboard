@@ -2,14 +2,13 @@
 
 import { AlertTriangle, Layers } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatBps } from '@/lib/format';
 import type { DashboardPayload } from '@/lib/views';
 import { SectionTitle } from '../ui/primitives';
 import { DashboardHeader } from './DashboardHeader';
 import { DetailDrawer } from './DetailDrawer';
 import { HardwareSection } from './HardwareSection';
 import { NetworkSection, type DetailTarget } from './NetworkCards';
-import { TrafficChart } from './TrafficChart';
+import { WanPanel } from './WanPanel';
 
 type Selected = { kind: 'group' | 'network'; id: string } | null;
 
@@ -30,7 +29,9 @@ function writePref(key: string, value: unknown) {
   }
 }
 
-export function Dashboard({ defaultRefreshMs }: { defaultRefreshMs: number }) {
+export type DashboardView = 'network' | 'hardware';
+
+export function Dashboard({ defaultRefreshMs, view }: { defaultRefreshMs: number; view: DashboardView }) {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [site, setSite] = useState<string>('');
   const [refreshMs, setRefreshMs] = useState(defaultRefreshMs);
@@ -122,6 +123,7 @@ export function Dashboard({ defaultRefreshMs }: { defaultRefreshMs: number }) {
         loading={loading}
         onReload={() => void load()}
         onLogout={logout}
+        view={view}
       />
 
       <main className="mx-auto max-w-[1800px] space-y-8 px-4 py-6 lg:px-6">
@@ -145,19 +147,9 @@ export function Dashboard({ defaultRefreshMs }: { defaultRefreshMs: number }) {
 
         {data && (
           <>
-            <section className="rounded-xl border border-noc-line bg-noc-panel p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-semibold uppercase tracking-wider text-noc-muted">WAN-Durchsatz</div>
-                <div className="flex gap-4 font-mono text-xs tabular-nums">
-                  <span className="text-noc-muted">
-                    Clients <span className="text-noc-text">{data.totals.total}</span> ({data.totals.wired} LAN / {data.totals.wireless} WLAN)
-                  </span>
-                  <span className="text-sky-300">↓ {formatBps(data.wan.down)}</span>
-                  <span className="text-violet-300">↑ {formatBps(data.wan.up)}</span>
-                </div>
-              </div>
-              <TrafficChart id="wan" data={data.wan.history} height={140} />
-            </section>
+            {view === 'network' && (
+              <>
+                <WanPanel data={data} />
 
             <section>
               <SectionTitle icon={<Layers className="h-4 w-4" />}>Netzwerke & VLAN-Gruppen</SectionTitle>
@@ -169,7 +161,9 @@ export function Dashboard({ defaultRefreshMs }: { defaultRefreshMs: number }) {
               />
             </section>
 
-            <HardwareSection data={data} />
+              </>
+            )}
+            {view === 'hardware' && <HardwareSection data={data} />}
           </>
         )}
       </main>

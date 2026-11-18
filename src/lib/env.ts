@@ -43,6 +43,9 @@ export function getConfig() {
     pollingIntervalMs: int('POLLING_INTERVAL_MS', 5000, 1000),
     historyMinutes: int('HISTORY_MINUTES', 30, 5),
     hideSensitiveIps: bool('HIDE_SENSITIVE_IPS', true),
+    /** Gebuchte WAN-Bandbreite in Mbit/s (0 = aus Speedtest bzw. Verlauf ableiten) */
+    wanDownMbps: int('WAN_BANDWIDTH_DOWN_MBPS', 0),
+    wanUpMbps: int('WAN_BANDWIDTH_UP_MBPS', 0),
     dataDir: str('DATA_DIR', './data'),
   };
 }
