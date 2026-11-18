@@ -10,22 +10,45 @@ services:
     image: localhost/unifi-dashboard:latest
     container_name: unifi-dashboard
     restart: unless-stopped
+    # Optional: .env neben compose.yaml. Stack-Manager (Portainer, Dockge, Komodo …), die
+    # Variablen nur für die Interpolation setzen, funktionieren über den environment-Block.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       DATA_DIR: /app/data
+      UNIFI_CONTROLLER_URL: ${UNIFI_CONTROLLER_URL:-}
+      UNIFI_SITE_ID: ${UNIFI_SITE_ID:-default}
+      UNIFI_API_KEY: ${UNIFI_API_KEY:-}
+      UNIFI_USERNAME: ${UNIFI_USERNAME:-}
+      UNIFI_PASSWORD: ${UNIFI_PASSWORD:-}
+      UNIFI_CONTROLLER_TYPE: ${UNIFI_CONTROLLER_TYPE:-auto}
+      UNIFI_VERIFY_SSL: ${UNIFI_VERIFY_SSL:-false}
+      UNIFI_MOCK: ${UNIFI_MOCK:-false}
+      POLLING_INTERVAL_MS: ${POLLING_INTERVAL_MS:-5000}
+      HISTORY_MINUTES: ${HISTORY_MINUTES:-30}
+      ACCESS_PASSWORD: ${ACCESS_PASSWORD:-}
+      TURNSTILE_ENABLED: ${TURNSTILE_ENABLED:-false}
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      HIDE_SENSITIVE_IPS: ${HIDE_SENSITIVE_IPS:-true}
     ports:
       # extern 3004 → intern 3000
-      - "3004:3000"
+      - "${HOST_PORT:-3004}:3000"
     volumes:
       # :Z = privates SELinux-Label, damit der Container schreiben darf
-      - ./data:/app/data:Z
-    # Rootless Podman: Host-User auf UID/GID 1000 (node) im Container abbilden,
-    # damit ./data ohne chown beschreibbar ist (Podman >= 4.3)
-    userns_mode: "keep-id:uid=1000,gid=1000"
+      - ${DATA_PATH:-./data}:/app/data:Z
+    # Rootless Podman: USERNS_MODE=keep-id:uid=1000,gid=1000 setzen, damit der Host-User
+    # im Container UID 1000 (node) ist und ./data ohne chown beschreibbar ist (Podman >= 4.3).
+    # Leer (Standard) = normales Verhalten, kompatibel mit Docker.
+    userns_mode: ${USERNS_MODE:-}
     user: "1000:1000"
     read_only: true
     tmpfs:

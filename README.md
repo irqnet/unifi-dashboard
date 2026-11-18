@@ -109,7 +109,7 @@ Das Dashboard ist danach unter **`http://<host>:3004`** erreichbar (Port-Mapping
 **Container-Details**
 - Multi-Stage-Build auf `node:20-alpine`; `python3`, `make`, `g++` nur in der Build-Stage für `better-sqlite3`.
 - Läuft als Non-Root-User `node` (UID 1000), `read_only: true` mit `tmpfs` für `/tmp` und `/app/.next/cache`, `cap_drop: ALL`, `no-new-privileges`.
-- Persistentes Volume `./data:/app/data:Z` (SELinux-Label). Mit `userns_mode: keep-id:uid=1000,gid=1000` wird der Host-Benutzer im Rootless-Podman auf UID 1000 abgebildet, sodass `./data` ohne `chown` beschreibbar ist.
+- Persistentes Volume `./data:/app/data:Z` (SELinux-Label). Mit `USERNS_MODE=keep-id:uid=1000,gid=1000` wird der Host-Benutzer im Rootless-Podman auf UID 1000 abgebildet, sodass `./data` ohne `chown` beschreibbar ist.
   Alternative (ohne keep-id): `podman unshare chown 1000:1000 data`.
 - Healthcheck gegen `/api/health` (in `compose.yaml`; der `HEALTHCHECK` im Dockerfile greift bei Podman nur mit `--format docker`).
 - `extra_hosts: unifi.local:host-gateway` als Beispiel, um den Controller per Hostname anzusprechen.
@@ -119,7 +119,15 @@ Das Dashboard ist danach unter **`http://<host>:3004`** erreichbar (Port-Mapping
 git pull && podman-compose up -d --build
 ```
 
-**Hinweis Docker Compose:** `userns_mode: keep-id…` ist Podman-spezifisch. Unter Docker diese Zeile entfernen und `data/` per `chown 1000:1000 data` vorbereiten.
+**Stack-Manager (Portainer, Dockge, Komodo, Arcane …):** Eine `.env`-Datei ist optional (`env_file … required: false`). Alle Variablen werden zusätzlich über den `environment:`-Block per `${VAR}`-Interpolation übernommen – es reicht also, die Variablen im Stack-UI zu hinterlegen. Zusätzliche Compose-Variablen:
+
+| Variable | Standard | Zweck |
+|---|---|---|
+| `HOST_PORT` | `3004` | externer Port |
+| `DATA_PATH` | `./data` | Host-Pfad für die SQLite-DB |
+| `USERNS_MODE` | leer | Rootless Podman: `keep-id:uid=1000,gid=1000` |
+
+**Docker statt Podman:** Das Datenverzeichnis muss für UID 1000 beschreibbar sein: `mkdir -p data && sudo chown 1000:1000 data` (bzw. für den unter `DATA_PATH` gesetzten Pfad).
 
 ## Entwicklung
 
