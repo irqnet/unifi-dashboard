@@ -1,12 +1,26 @@
 'use client';
 
-import clsx from 'clsx';
-import { Check, ExternalLink, Globe, Loader2, Lock, Pencil, Plus, ShieldCheck, Trash2, Users, X, LayoutDashboard } from 'lucide-react';
+import { ExternalLink, Globe, Lock, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { SiteInfo } from '@/lib/views';
-import { Button, Panel, SectionTitle, Toggle } from '../ui/primitives';
-
-type Api = <T>(url: string, init?: RequestInit) => Promise<{ data?: T; error?: string }>;
+import {
+  Banner,
+  CheckRow,
+  DeleteRow,
+  EmptyRow,
+  FieldRow,
+  Group,
+  LinkButton,
+  LoadingRow,
+  PageHeader,
+  Pill,
+  PrimaryButton,
+  Row,
+  Sheet,
+  SwitchRow,
+  TextInput,
+  type Api,
+} from './ui';
 
 interface StatusPage {
   id: number;
@@ -43,7 +57,7 @@ const EMPTY_PAGE: PageDraft = { slug: '', title: '', description: '', showWan: f
 type UserDraft = Omit<UserRow, 'id' | 'lastLoginAt'> & { password: string };
 const EMPTY_USER: UserDraft = { username: '', displayName: '', isAdmin: false, disabled: false, pageIds: [], password: '' };
 
-const label = 'mb-1 block text-xs font-medium uppercase tracking-wider text-noc-muted';
+const AVATAR_COLORS = ['#0a84ff', '#ff9f0a', '#30b0c7', '#bf5af2', '#ff375f', '#32d74b', '#64d2ff', '#ffd60a'];
 
 function slugify(s: string): string {
   return s
@@ -60,86 +74,47 @@ function slugify(s: string): string {
     .replace(/-+$/g, '');
 }
 
-function CheckList<T extends { id: number }>({
-  items,
-  selected,
-  onChange,
-  render,
-  empty,
-}: {
-  items: T[];
-  selected: number[];
-  onChange: (ids: number[]) => void;
-  render: (item: T) => React.ReactNode;
-  empty: string;
-}) {
-  if (!items.length) return <p className="rounded-lg border border-dashed border-noc-line p-3 text-sm text-noc-muted">{empty}</p>;
-  return (
-    <div className="grid max-h-60 gap-1.5 overflow-y-auto rounded-lg border border-noc-line bg-noc-bg p-2 sm:grid-cols-2">
-      {items.map((it) => {
-        const checked = selected.includes(it.id);
-        return (
-          <button
-            key={it.id}
-            type="button"
-            onClick={() => onChange(checked ? selected.filter((x) => x !== it.id) : [...selected, it.id])}
-            className={clsx(
-              'flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition',
-              checked ? 'border-sky-500/60 bg-sky-500/10' : 'border-noc-line hover:border-slate-500',
-            )}
-          >
-            <span
-              className={clsx(
-                'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                checked ? 'border-sky-400 bg-sky-500 text-slate-950' : 'border-noc-line',
-              )}
-            >
-              {checked && <Check className="h-3 w-3" />}
-            </span>
-            <span className="min-w-0">{render(it)}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
+function toggleId(list: number[], id: number) {
+  return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 }
 
-function GroupLabel({ g }: { g: GroupRef }) {
-  return (
-    <span className="flex items-center gap-1.5 truncate text-noc-text">
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: g.color }} />
-      {g.name}
-      {g.hidden && <span className="text-[10px] text-noc-muted">(im Dashboard verborgen)</span>}
-    </span>
-  );
+function fmtLogin(ts: string | null) {
+  if (!ts) return 'Noch nie angemeldet';
+  const d = new Date(`${ts.replace(' ', 'T')}Z`);
+  return `Zuletzt angemeldet ${d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
 }
 
-// --- Statusseiten-Editor -----------------------------------------------------------
+// --- Statusseiten --------------------------------------------------------------------
+
 function PageEditor({
   initial,
   isNew,
   groups,
   deviceGroups,
+  users,
   onSave,
+  onDelete,
   onCancel,
 }: {
   initial: PageDraft;
   isNew: boolean;
   groups: GroupRef[];
   deviceGroups: GroupRef[];
+  users: UserRow[];
   onSave: (d: PageDraft) => Promise<string | null>;
+  onDelete?: () => Promise<void>;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<PageDraft>(initial);
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof PageDraft>(k: K, v: PageDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!draft.title.trim()) return setError('Bitte einen Titel angeben');
-    if (!draft.slug) return setError('Bitte eine Adresse angeben');
+  async function submit() {
+    if (!draft.title.trim()) return setError('Gib der Statusseite einen Titel.');
+    if (!draft.slug) return setError('Gib eine Adresse an, zum Beispiel „gebaeude-a“.');
     setBusy(true);
     setError(null);
     const err = await onSave(draft);
@@ -148,236 +123,134 @@ function PageEditor({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-sky-500/40 bg-noc-panel p-4">
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className={label}>Titel</label>
-          <input
-            className="w-full"
+    <Sheet title={isNew ? 'Neue Statusseite' : 'Statusseite bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+      <Group>
+        <FieldRow label="Titel" htmlFor="sp-title">
+          <TextInput
+            id="sp-title"
             value={draft.title}
             maxLength={80}
-            autoFocus
             placeholder="z. B. Gebäude A"
             onChange={(e) => {
               const title = e.target.value;
               setDraft((d) => ({ ...d, title, slug: slugTouched ? d.slug : slugify(title) }));
             }}
           />
-        </div>
-        <div>
-          <label className={label}>Adresse</label>
-          <div className="flex items-center rounded-lg border border-noc-line bg-noc-bg pl-2.5 text-sm">
+        </FieldRow>
+        <FieldRow label="Adresse" htmlFor="sp-slug">
+          <div className="flex items-center text-sm">
             <span className="text-noc-muted">/s/</span>
-            <input
-              className="w-full !border-0 !bg-transparent !pl-0.5 !ring-0"
+            <TextInput
+              id="sp-slug"
               value={draft.slug}
               maxLength={64}
+              className="font-mono"
               onChange={(e) => {
                 setSlugTouched(true);
                 set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
               }}
             />
           </div>
-        </div>
-        <div className="md:col-span-2">
-          <label className={label}>Beschreibung (optional)</label>
-          <input className="w-full" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} />
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-6">
-        <Toggle checked={draft.showWan} onChange={(v) => set('showWan', v)} label="WAN-Durchsatz & Gateway anzeigen" />
-        <Toggle checked={draft.isPublic} onChange={(v) => set('isPublic', v)} label="Öffentlich (ohne Login, z. B. Wandmonitor)" />
-      </div>
-      <div>
-        <span className={label}>VLAN-Gruppen ({draft.groupIds.length})</span>
-        <CheckList
-          items={groups}
-          selected={draft.groupIds}
-          onChange={(ids) => set('groupIds', ids)}
-          render={(g) => <GroupLabel g={g} />}
-          empty="Für diesen Standort gibt es noch keine Netzwerk-Gruppen."
-        />
-      </div>
-      <div>
-        <span className={label}>Geräte-Gruppen ({draft.deviceGroupIds.length})</span>
-        <CheckList
-          items={deviceGroups}
-          selected={draft.deviceGroupIds}
-          onChange={(ids) => set('deviceGroupIds', ids)}
-          render={(g) => <GroupLabel g={g} />}
-          empty="Für diesen Standort gibt es noch keine Geräte-Gruppen."
-        />
-      </div>
-      {draft.isPublic && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Öffentliche Seiten sind ohne Turnstile und ohne Login für jeden mit der Adresse sichtbar. Client-MACs und die WAN-IP werden
-          maskiert, Client-Namen bleiben sichtbar, sofern die Gruppe nicht anonymisiert ist.
-        </p>
+        </FieldRow>
+        <FieldRow label="Beschreibung" htmlFor="sp-desc">
+          <TextInput id="sp-desc" value={draft.description} maxLength={300} placeholder="Optional" onChange={(e) => set('description', e.target.value)} />
+        </FieldRow>
+      </Group>
+
+      <Group
+        footer={
+          draft.isPublic
+            ? 'Jeder mit der Adresse sieht die Seite, ohne Login und ohne Bot-Prüfung. MACs und WAN-IP bleiben maskiert, Client-Namen sind sichtbar, sofern die Gruppe nicht anonymisiert ist.'
+            : undefined
+        }
+      >
+        <SwitchRow title="WAN-Durchsatz und Gateway zeigen" checked={draft.showWan} onChange={(v) => set('showWan', v)} />
+        <SwitchRow title="Öffentlich" subtitle="Ohne Login erreichbar, z. B. für einen Wandmonitor." checked={draft.isPublic} onChange={(v) => set('isPublic', v)} />
+      </Group>
+
+      <Group title="Netzwerk-Gruppen" aside={`${draft.groupIds.length} ausgewählt`}>
+        {groups.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">An diesem Standort gibt es noch keine Netzwerk-Gruppen.</p>}
+        {groups.map((g) => (
+          <CheckRow
+            key={g.id}
+            checked={draft.groupIds.includes(g.id)}
+            onToggle={() => set('groupIds', toggleId(draft.groupIds, g.id))}
+            icon={<span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />}
+            title={g.name}
+            subtitle={g.hidden ? 'Im Dashboard ausgeblendet' : undefined}
+          />
+        ))}
+      </Group>
+
+      <Group title="Geräte-Gruppen" aside={`${draft.deviceGroupIds.length} ausgewählt`}>
+        {deviceGroups.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">An diesem Standort gibt es noch keine Geräte-Gruppen.</p>}
+        {deviceGroups.map((g) => (
+          <CheckRow
+            key={g.id}
+            checked={draft.deviceGroupIds.includes(g.id)}
+            onToggle={() => set('deviceGroupIds', toggleId(draft.deviceGroupIds, g.id))}
+            icon={<span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />}
+            title={g.name}
+            subtitle={g.hidden ? 'Im Dashboard ausgeblendet' : undefined}
+          />
+        ))}
+      </Group>
+
+      {!isNew && (
+        <Group title="Freigegeben für">
+          <Row title={users.length ? users.map((u) => u.displayName || u.username).join(', ') : 'Noch kein Benutzer'} subtitle="Freigaben verwaltest du unter Benutzer." />
+        </Group>
       )}
-      {error && <p className="text-sm text-rose-300">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          <X className="h-4 w-4" /> Abbrechen
-        </Button>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Speichern
-        </Button>
-      </div>
-    </form>
+
+      {!isNew && onDelete && (
+        <DeleteRow
+          label="Statusseite löschen"
+          confirming={confirmDelete}
+          onAsk={() => setConfirmDelete(true)}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => void onDelete()}
+          hint="Die Adresse funktioniert danach nicht mehr. Die Gruppen bleiben erhalten."
+        />
+      )}
+    </Sheet>
   );
 }
 
-// --- Benutzer-Editor ---------------------------------------------------------------
-function UserEditor({
-  initial,
-  isNew,
-  isSelf,
-  pages,
-  sites,
-  onSave,
-  onCancel,
-}: {
-  initial: UserDraft;
-  isNew: boolean;
-  isSelf: boolean;
-  pages: StatusPage[];
-  sites: SiteInfo[];
-  onSave: (d: UserDraft) => Promise<string | null>;
-  onCancel: () => void;
-}) {
-  const [draft, setDraft] = useState<UserDraft>(initial);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const set = <K extends keyof UserDraft>(k: K, v: UserDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const siteName = (s: string) => sites.find((x) => x.name === s)?.desc ?? s;
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!draft.username.trim()) return setError('Bitte einen Benutzernamen angeben');
-    if (isNew && draft.password.length < 8) return setError('Passwort: mindestens 8 Zeichen');
-    if (!isNew && draft.password && draft.password.length < 8) return setError('Passwort: mindestens 8 Zeichen');
-    setBusy(true);
-    setError(null);
-    const err = await onSave(draft);
-    setBusy(false);
-    if (err) setError(err);
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-sky-500/40 bg-noc-panel p-4">
-      <div className="grid gap-3 md:grid-cols-3">
-        <div>
-          <label className={label}>Benutzername</label>
-          <input
-            className="w-full"
-            value={draft.username}
-            maxLength={64}
-            autoFocus
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            onChange={(e) => set('username', e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={label}>Anzeigename (optional)</label>
-          <input className="w-full" value={draft.displayName} maxLength={80} onChange={(e) => set('displayName', e.target.value)} />
-        </div>
-        <div>
-          <label className={label}>{isNew ? 'Passwort' : 'Neues Passwort (optional)'}</label>
-          <input
-            className="w-full"
-            type="password"
-            autoComplete="new-password"
-            value={draft.password}
-            maxLength={200}
-            placeholder={isNew ? 'mind. 8 Zeichen' : 'leer = unverändert'}
-            onChange={(e) => set('password', e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-6">
-        <Toggle checked={draft.isAdmin} onChange={(v) => set('isAdmin', v)} disabled={isSelf} label="Admin (sieht und verwaltet alles)" />
-        <Toggle checked={draft.disabled} onChange={(v) => set('disabled', v)} disabled={isSelf} label="Gesperrt" />
-      </div>
-      {!draft.isAdmin && (
-        <div>
-          <span className={label}>Freigegebene Statusseiten ({draft.pageIds.length})</span>
-          <CheckList
-            items={pages}
-            selected={draft.pageIds}
-            onChange={(ids) => set('pageIds', ids)}
-            render={(p) => (
-              <>
-                <span className="block truncate text-noc-text">{p.title}</span>
-                <span className="block truncate font-mono text-[11px] text-noc-muted">
-                  /s/{p.slug}
-                  {sites.length > 1 && ` · ${siteName(p.site)}`}
-                </span>
-              </>
-            )}
-            empty="Lege zuerst eine Statusseite an."
-          />
-        </div>
-      )}
-      {error && <p className="text-sm text-rose-300">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          <X className="h-4 w-4" /> Abbrechen
-        </Button>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Speichern
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-// --- Bereich im Admin ----------------------------------------------------------------
-export function AccessAdmin({
+export function StatusPagesSection({
   site,
-  sites,
   api,
   reloadSignal,
   onError,
+  onChanged,
 }: {
   site: string;
-  sites: SiteInfo[];
   api: Api;
   reloadSignal: number;
   onError: (e: string | null) => void;
+  onChanged: () => void;
 }) {
   const [pages, setPages] = useState<StatusPage[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [groups, setGroups] = useState<GroupRef[]>([]);
   const [deviceGroups, setDeviceGroups] = useState<GroupRef[]>([]);
-  const [sharedAccess, setSharedAccess] = useState(true);
-  const [editPage, setEditPage] = useState<number | 'new' | null>(null);
-  const [editUser, setEditUser] = useState<number | 'new' | null>(null);
-  const [confirm, setConfirm] = useState<string | null>(null);
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
     if (!site) return;
     setLoading(true);
     const q = `?site=${encodeURIComponent(site)}`;
-    const [p, u, g, d, s] = await Promise.all([
+    const [p, u, g, d] = await Promise.all([
       api<{ pages: StatusPage[] }>('/api/admin/status-pages'),
-      api<{ users: UserRow[]; currentUserId: number | null }>('/api/admin/users'),
+      api<{ users: UserRow[] }>('/api/admin/users'),
       api<{ groups: GroupRef[] }>(`/api/admin/groups${q}`),
       api<{ groups: GroupRef[] }>(`/api/admin/device-groups${q}`),
-      api<{ settings: { allowSharedAccess: boolean } }>('/api/admin/settings'),
     ]);
     if (p.data) setPages(p.data.pages);
-    if (u.data) {
-      setUsers(u.data.users);
-      setCurrentUserId(u.data.currentUserId);
-    }
+    if (u.data) setUsers(u.data.users);
     if (g.data) setGroups(g.data.groups);
     if (d.data) setDeviceGroups(d.data.groups);
-    if (s.data) setSharedAccess(s.data.settings.allowSharedAccess);
-    const err = p.error ?? u.error ?? g.error ?? d.error ?? s.error;
+    const err = p.error ?? u.error ?? g.error ?? d.error;
     if (err) onError(err);
     setLoading(false);
   }, [site, api, onError]);
@@ -386,300 +259,387 @@ export function AccessAdmin({
     void reload();
   }, [reload, reloadSignal]);
 
-  const savePage = async (id: number | 'new', draft: PageDraft) => {
+  const save = async (id: number | 'new', draft: PageDraft) => {
     const res =
       id === 'new'
         ? await api('/api/admin/status-pages', { method: 'POST', body: JSON.stringify({ ...draft, site }) })
         : await api(`/api/admin/status-pages/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
     if (res.error) return res.error;
-    setEditPage(null);
+    setEditing(null);
     await reload();
+    onChanged();
     return null;
   };
 
-  const saveUser = async (id: number | 'new', draft: UserDraft) => {
+  const remove = async (id: number) => {
+    const res = await api(`/api/admin/status-pages/${id}`, { method: 'DELETE' });
+    if (res.error) onError(res.error);
+    setEditing(null);
+    await reload();
+    onChanged();
+  };
+
+  const sitePages = pages.filter((p) => p.site === site);
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const devGroupById = new Map(deviceGroups.map((g) => [g.id, g]));
+  const editPage = typeof editing === 'number' ? sitePages.find((p) => p.id === editing) : undefined;
+
+  return (
+    <>
+      <PageHeader
+        title="Statusseiten"
+        lead="Eine Statusseite zeigt nur die gewählten Gruppen dieses Standorts unter einer eigenen Adresse. Benutzer sehen nur die Seiten, die du ihnen freigibst."
+        action={
+          <PrimaryButton onClick={() => setEditing('new')}>
+            <Plus className="h-4 w-4" /> Statusseite
+          </PrimaryButton>
+        }
+      />
+
+      <Group title="Seiten">
+        {loading && !sitePages.length && <LoadingRow />}
+        {!loading && !sitePages.length && (
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Erste Statusseite anlegen</LinkButton>}>
+            Noch keine Statusseiten an diesem Standort. Lege zum Beispiel eine Seite pro Gebäude oder Mieter an.
+          </EmptyRow>
+        )}
+        {sitePages.map((p) => {
+          const parts = [
+            ...p.groupIds.map((id) => groupById.get(id)?.name),
+            ...p.deviceGroupIds.map((id) => devGroupById.get(id)?.name),
+          ].filter(Boolean) as string[];
+          const pageUsers = users.filter((u) => u.pageIds.includes(p.id)).length;
+          return (
+            <div key={p.id} className="flex items-stretch">
+              <Row
+                className="flex-1"
+                icon={
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#30b0c7]/20 text-[#64d2ff]">
+                    {p.isPublic ? <Globe className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                  </span>
+                }
+                title={
+                  <>
+                    {p.title} <span className="ml-1 font-mono text-[12px] font-normal text-noc-muted">/s/{p.slug}</span>
+                  </>
+                }
+                subtitle={(p.showWan ? ['WAN', ...parts] : parts).join(', ') || 'Keine Gruppen gewählt'}
+                onClick={() => setEditing(p.id)}
+                detail={
+                  <>
+                    {p.isPublic ? <Pill tone="warn">öffentlich</Pill> : null}
+                    <span className="hidden sm:inline">
+                      {pageUsers} Benutzer
+                    </span>
+                  </>
+                }
+              />
+              <a
+                href={`/s/${p.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center border-l border-white/[0.06] px-3.5 text-noc-muted hover:bg-white/[0.03] hover:text-sky-300"
+                title="Seite öffnen"
+                aria-label={`${p.title} öffnen`}
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          );
+        })}
+      </Group>
+
+      {editing === 'new' && (
+        <PageEditor isNew initial={EMPTY_PAGE} groups={groups} deviceGroups={deviceGroups} users={[]} onSave={(d) => save('new', d)} onCancel={() => setEditing(null)} />
+      )}
+      {editPage && (
+        <PageEditor
+          key={editPage.id}
+          isNew={false}
+          initial={editPage}
+          groups={groups}
+          deviceGroups={deviceGroups}
+          users={users.filter((u) => u.pageIds.includes(editPage.id))}
+          onSave={(d) => save(editPage.id, d)}
+          onDelete={() => remove(editPage.id)}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// --- Benutzer -----------------------------------------------------------------------
+
+function UserEditor({
+  initial,
+  isNew,
+  isSelf,
+  pages,
+  sites,
+  lastLoginAt,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  initial: UserDraft;
+  isNew: boolean;
+  isSelf: boolean;
+  pages: StatusPage[];
+  sites: SiteInfo[];
+  lastLoginAt?: string | null;
+  onSave: (d: UserDraft) => Promise<string | null>;
+  onDelete?: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState<UserDraft>(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const set = <K extends keyof UserDraft>(k: K, v: UserDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const siteName = (s: string) => sites.find((x) => x.name === s)?.desc ?? s;
+
+  async function submit() {
+    if (!draft.username.trim()) return setError('Gib einen Benutzernamen an.');
+    if ((isNew || draft.password) && draft.password.length < 8) return setError('Das Passwort braucht mindestens 8 Zeichen.');
+    setBusy(true);
+    setError(null);
+    const err = await onSave(draft);
+    setBusy(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <Sheet title={isNew ? 'Neuer Benutzer' : 'Benutzer bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+      <Group footer={!isNew ? fmtLogin(lastLoginAt ?? null) : undefined}>
+        <FieldRow label="Benutzername" htmlFor="u-name">
+          <TextInput
+            id="u-name"
+            value={draft.username}
+            maxLength={64}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            onChange={(e) => set('username', e.target.value)}
+          />
+        </FieldRow>
+        <FieldRow label="Anzeigename" htmlFor="u-display">
+          <TextInput id="u-display" value={draft.displayName} maxLength={80} placeholder="Optional" onChange={(e) => set('displayName', e.target.value)} />
+        </FieldRow>
+        <FieldRow label={isNew ? 'Passwort' : 'Neues Passwort'} htmlFor="u-pw">
+          <TextInput
+            id="u-pw"
+            type="password"
+            autoComplete="new-password"
+            value={draft.password}
+            maxLength={200}
+            placeholder={isNew ? 'Mindestens 8 Zeichen' : 'Leer lassen, um es zu behalten'}
+            onChange={(e) => set('password', e.target.value)}
+          />
+        </FieldRow>
+      </Group>
+
+      <Group footer={isSelf ? 'Rolle und Sperre deines eigenen Kontos kannst du nicht ändern.' : 'Ändern sich Passwort, Rolle oder Sperre, werden laufende Sitzungen sofort beendet.'}>
+        <SwitchRow title="Admin" subtitle="Sieht und verwaltet alles." checked={draft.isAdmin} onChange={(v) => set('isAdmin', v)} disabled={isSelf} />
+        <SwitchRow title="Gesperrt" subtitle="Anmeldung nicht möglich." checked={draft.disabled} onChange={(v) => set('disabled', v)} disabled={isSelf} />
+      </Group>
+
+      {!draft.isAdmin && (
+        <Group title="Freigegebene Statusseiten" aside={`${draft.pageIds.length} ausgewählt`}>
+          {pages.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">Lege zuerst unter Statusseiten eine Seite an.</p>}
+          {pages.map((p) => (
+            <CheckRow
+              key={p.id}
+              checked={draft.pageIds.includes(p.id)}
+              onToggle={() => set('pageIds', toggleId(draft.pageIds, p.id))}
+              title={p.title}
+              subtitle={sites.length > 1 ? siteName(p.site) : undefined}
+              detail={`/s/${p.slug}`}
+            />
+          ))}
+        </Group>
+      )}
+
+      {!isNew && onDelete && (
+        <DeleteRow
+          label="Benutzer löschen"
+          confirming={confirmDelete}
+          onAsk={() => setConfirmDelete(true)}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => void onDelete()}
+          disabled={isSelf}
+          hint={isSelf ? 'Dein eigenes Konto kannst du nicht löschen.' : undefined}
+        />
+      )}
+    </Sheet>
+  );
+}
+
+export function UsersSection({
+  sites,
+  api,
+  reloadSignal,
+  onError,
+  onChanged,
+}: {
+  sites: SiteInfo[];
+  api: Api;
+  reloadSignal: number;
+  onError: (e: string | null) => void;
+  onChanged: () => void;
+}) {
+  const [pages, setPages] = useState<StatusPage[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [sharedAccess, setSharedAccess] = useState(true);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const [p, u, s] = await Promise.all([
+      api<{ pages: StatusPage[] }>('/api/admin/status-pages'),
+      api<{ users: UserRow[]; currentUserId: number | null }>('/api/admin/users'),
+      api<{ settings: { allowSharedAccess: boolean } }>('/api/admin/settings'),
+    ]);
+    if (p.data) setPages(p.data.pages);
+    if (u.data) {
+      setUsers(u.data.users);
+      setCurrentUserId(u.data.currentUserId);
+    }
+    if (s.data) setSharedAccess(s.data.settings.allowSharedAccess);
+    const err = p.error ?? u.error ?? s.error;
+    if (err) onError(err);
+    setLoading(false);
+  }, [api, onError]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload, reloadSignal]);
+
+  const save = async (id: number | 'new', draft: UserDraft) => {
     const body = { ...draft, pageIds: draft.isAdmin ? [] : draft.pageIds };
     const res =
       id === 'new'
         ? await api('/api/admin/users', { method: 'POST', body: JSON.stringify(body) })
         : await api(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(body) });
     if (res.error) return res.error;
-    setEditUser(null);
+    setEditing(null);
     await reload();
+    onChanged();
     return null;
   };
 
-  const remove = async (kind: 'page' | 'user', id: number) => {
-    const res = await api(kind === 'page' ? `/api/admin/status-pages/${id}` : `/api/admin/users/${id}`, { method: 'DELETE' });
-    onError(res.error ?? null);
-    setConfirm(null);
+  const remove = async (id: number) => {
+    const res = await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+    if (res.error) onError(res.error);
+    setEditing(null);
     await reload();
+    onChanged();
   };
 
   const toggleShared = async (v: boolean) => {
+    setSharedError(null);
     const res = await api<{ settings: { allowSharedAccess: boolean } }>('/api/admin/settings', {
       method: 'PUT',
       body: JSON.stringify({ allowSharedAccess: v }),
     });
-    if (res.error) onError(res.error);
+    if (res.error) setSharedError(res.error);
     else setSharedAccess(v);
   };
 
-  const sitePages = pages.filter((p) => p.site === site);
-  const groupById = new Map(groups.map((g) => [g.id, g]));
-  const devGroupById = new Map(deviceGroups.map((g) => [g.id, g]));
   const pageById = new Map(pages.map((p) => [p.id, p]));
+  const editUser = typeof editing === 'number' ? users.find((u) => u.id === editing) : undefined;
 
   return (
     <>
-      {/* ---------------- Statusseiten ---------------- */}
-      <section>
-        <SectionTitle
-          icon={<LayoutDashboard className="h-4 w-4" />}
-          right={
-            editPage !== 'new' && (
-              <Button variant="primary" onClick={() => setEditPage('new')}>
-                <Plus className="h-4 w-4" /> Neue Statusseite
-              </Button>
-            )
-          }
-        >
-          Statusseiten
-        </SectionTitle>
-        <p className="mb-3 text-sm text-noc-muted">
-          Eine Statusseite zeigt nur die gewählten VLAN- und Geräte-Gruppen dieses Standorts. Benutzer sehen ausschließlich die ihnen
-          freigegebenen Seiten.
-        </p>
-        <div className="space-y-3">
-          {editPage === 'new' && (
-            <PageEditor
-              initial={EMPTY_PAGE}
-              isNew
-              groups={groups}
-              deviceGroups={deviceGroups}
-              onSave={(d) => savePage('new', d)}
-              onCancel={() => setEditPage(null)}
-            />
-          )}
-          {!loading && sitePages.length === 0 && editPage !== 'new' && (
-            <div className="rounded-xl border border-dashed border-noc-line p-6 text-center text-sm text-noc-muted">
-              Noch keine Statusseiten für diesen Standort.
-            </div>
-          )}
-          {sitePages.map((p) =>
-            editPage === p.id ? (
-              <PageEditor
-                key={p.id}
-                initial={p}
-                isNew={false}
-                groups={groups}
-                deviceGroups={deviceGroups}
-                onSave={(d) => savePage(p.id, d)}
-                onCancel={() => setEditPage(null)}
-              />
-            ) : (
-              <Panel key={p.id} className="flex flex-wrap items-start gap-3 p-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-noc-text">{p.title}</span>
-                    <a
-                      href={`/s/${p.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-xs text-sky-300 hover:underline"
-                    >
-                      /s/{p.slug} <ExternalLink className="h-3 w-3" />
-                    </a>
-                    {p.isPublic ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300 ring-1 ring-inset ring-amber-500/30">
-                        <Globe className="h-3 w-3" /> öffentlich
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300 ring-1 ring-inset ring-slate-500/30">
-                        <Lock className="h-3 w-3" /> Login
-                      </span>
-                    )}
-                    {p.showWan && <span className="text-[11px] text-noc-muted">+ WAN</span>}
-                  </div>
-                  {p.description && <div className="mt-0.5 text-xs text-noc-muted">{p.description}</div>}
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                    {p.groupIds.map((id) => groupById.get(id)).filter(Boolean).map((g) => (
-                      <span key={`n${g!.id}`} className="inline-flex items-center gap-1 rounded-md border border-noc-line px-1.5 py-0.5 text-noc-text">
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: g!.color }} />
-                        {g!.name}
-                      </span>
-                    ))}
-                    {p.deviceGroupIds.map((id) => devGroupById.get(id)).filter(Boolean).map((g) => (
-                      <span key={`d${g!.id}`} className="inline-flex items-center gap-1 rounded-md border border-dashed border-noc-line px-1.5 py-0.5 text-noc-text">
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: g!.color }} />
-                        {g!.name}
-                      </span>
-                    ))}
-                    {!p.groupIds.length && !p.deviceGroupIds.length && <span className="text-noc-muted">Keine Gruppen zugeordnet</span>}
-                  </div>
-                  <div className="mt-1.5 text-[11px] text-noc-muted">
-                    Benutzer: {users.filter((u) => u.pageIds.includes(p.id)).map((u) => u.username).join(', ') || '–'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {confirm === `page:${p.id}` ? (
-                    <>
-                      <Button variant="danger" onClick={() => void remove('page', p.id)}>
-                        Löschen?
-                      </Button>
-                      <Button variant="ghost" onClick={() => setConfirm(null)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button variant="ghost" onClick={() => setEditPage(p.id)} title="Bearbeiten">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" onClick={() => setConfirm(`page:${p.id}`)} title="Löschen">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </Panel>
-            ),
-          )}
-        </div>
-      </section>
+      <PageHeader
+        title="Benutzer"
+        lead="Konten melden sich am Login mit Benutzername und Passwort an. Betrachter sehen nur ihre freigegebenen Statusseiten, Admins sehen alles."
+        action={
+          <PrimaryButton onClick={() => setEditing('new')}>
+            <Plus className="h-4 w-4" /> Benutzer
+          </PrimaryButton>
+        }
+      />
 
-      {/* ---------------- Benutzer ---------------- */}
-      <section>
-        <SectionTitle
-          icon={<Users className="h-4 w-4" />}
-          right={
-            editUser !== 'new' && (
-              <Button variant="primary" onClick={() => setEditUser('new')}>
-                <Plus className="h-4 w-4" /> Neuer Benutzer
-              </Button>
-            )
-          }
-        >
-          Benutzer
-        </SectionTitle>
-        <Panel className="mb-3 p-4">
-          <Toggle
-            checked={sharedAccess}
-            onChange={(v) => void toggleShared(v)}
-            label="Gemeinsamer Zugang ohne Benutzerkonto (Zugangspasswort/Turnstile) sieht die Gesamtansicht"
-          />
-          <p className="mt-1.5 pl-11 text-xs text-noc-muted">
-            Ausschalten, damit nur noch Benutzerkonten Zugriff haben. Dafür ist mindestens ein aktives Admin-Konto nötig.
-          </p>
-        </Panel>
-        <div className="space-y-3">
-          {editUser === 'new' && (
-            <UserEditor
-              initial={EMPTY_USER}
-              isNew
-              isSelf={false}
-              pages={pages}
-              sites={sites}
-              onSave={(d) => saveUser('new', d)}
-              onCancel={() => setEditUser(null)}
+      {sharedError && <Banner tone="warn">{sharedError}</Banner>}
+      <Group footer="Zum Abschalten muss es mindestens ein aktives Admin-Konto geben, sonst sperrst du dich aus.">
+        <SwitchRow
+          title="Zugang ohne Benutzerkonto"
+          subtitle="Mit dem gemeinsamen Zugangspasswort sieht man die Gesamtansicht."
+          checked={sharedAccess}
+          onChange={(v) => void toggleShared(v)}
+        />
+      </Group>
+
+      <Group title="Konten">
+        {loading && !users.length && <LoadingRow />}
+        {!loading && !users.length && (
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Ersten Benutzer anlegen</LinkButton>}>Noch keine Benutzerkonten.</EmptyRow>
+        )}
+        {users.map((u, i) => {
+          const name = u.displayName || u.username;
+          const initials = name
+            .split(/[\s._-]+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w) => w[0]!.toUpperCase())
+            .join('');
+          const pageNames = u.pageIds.map((id) => pageById.get(id)?.title).filter(Boolean).join(', ');
+          return (
+            <Row
+              key={u.id}
+              dim={u.disabled}
+              icon={
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold text-white"
+                  style={{ background: u.disabled ? '#48484a' : AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+                >
+                  {initials || '?'}
+                </span>
+              }
+              title={
+                <>
+                  {name}
+                  {u.id === currentUserId && <span className="ml-1.5 text-[12px] font-normal text-noc-muted">(du)</span>}
+                </>
+              }
+              subtitle={u.displayName ? `@${u.username}` : fmtLogin(u.lastLoginAt)}
+              onClick={() => setEditing(u.id)}
+              detail={
+                u.disabled ? (
+                  <Pill tone="danger">gesperrt</Pill>
+                ) : u.isAdmin ? (
+                  <Pill tone="info">Admin</Pill>
+                ) : (
+                  <span className="max-w-[16rem] truncate">{pageNames || 'Keine Seite'}</span>
+                )
+              }
             />
-          )}
-          {editUser !== null && editUser !== 'new' && (() => {
-            const u = users.find((x) => x.id === editUser);
-            return u ? (
-              <UserEditor
-                key={u.id}
-                initial={{ ...u, password: '' }}
-                isNew={false}
-                isSelf={u.id === currentUserId}
-                pages={pages}
-                sites={sites}
-                onSave={(d) => saveUser(u.id, d)}
-                onCancel={() => setEditUser(null)}
-              />
-            ) : null;
-          })()}
-          {!loading && users.length === 0 && editUser !== 'new' && (
-            <div className="rounded-xl border border-dashed border-noc-line p-6 text-center text-sm text-noc-muted">Noch keine Benutzer angelegt.</div>
-          )}
-          {users.length > 0 && (
-            <Panel className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-noc-line text-left text-[11px] uppercase tracking-wider text-noc-muted">
-                    <th className="px-4 py-2 font-medium">Benutzer</th>
-                    <th className="px-4 py-2 font-medium">Rolle</th>
-                    <th className="px-4 py-2 font-medium">Statusseiten</th>
-                    <th className="px-4 py-2 font-medium">Letzter Login</th>
-                    <th className="px-4 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className={clsx('border-b border-noc-line/60 last:border-0', u.disabled && 'opacity-50')}>
-                      <td className="px-4 py-2">
-                        <div className="font-medium text-noc-text">
-                          {u.username}
-                          {u.id === currentUserId && <span className="ml-1.5 text-[11px] text-noc-muted">(du)</span>}
-                        </div>
-                        {u.displayName && <div className="text-xs text-noc-muted">{u.displayName}</div>}
-                      </td>
-                      <td className="px-4 py-2">
-                        {u.isAdmin ? (
-                          <span className="inline-flex items-center gap-1 text-sky-300">
-                            <ShieldCheck className="h-3.5 w-3.5" /> Admin
-                          </span>
-                        ) : (
-                          <span className="text-noc-text">Betrachter</span>
-                        )}
-                        {u.disabled && <span className="ml-1.5 text-xs text-rose-300">gesperrt</span>}
-                      </td>
-                      <td className="px-4 py-2 text-xs text-noc-text">
-                        {u.isAdmin ? (
-                          <span className="text-noc-muted">alle</span>
-                        ) : (
-                          u.pageIds.map((id) => pageById.get(id)?.title).filter(Boolean).join(', ') || <span className="text-noc-muted">keine</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-noc-muted">
-                        {u.lastLoginAt ? new Date(`${u.lastLoginAt.replace(' ', 'T')}Z`).toLocaleString('de-DE') : '–'}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex justify-end gap-1">
-                          {confirm === `user:${u.id}` ? (
-                            <>
-                              <Button variant="danger" onClick={() => void remove('user', u.id)}>
-                                Löschen?
-                              </Button>
-                              <Button variant="ghost" onClick={() => setConfirm(null)}>
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button variant="ghost" onClick={() => setEditUser(u.id)} title="Bearbeiten">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                onClick={() => setConfirm(`user:${u.id}`)}
-                                disabled={u.id === currentUserId}
-                                title="Löschen"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Panel>
-          )}
-        </div>
-      </section>
+          );
+        })}
+      </Group>
+
+      {editing === 'new' && (
+        <UserEditor isNew isSelf={false} initial={EMPTY_USER} pages={pages} sites={sites} onSave={(d) => save('new', d)} onCancel={() => setEditing(null)} />
+      )}
+      {editUser && (
+        <UserEditor
+          key={editUser.id}
+          isNew={false}
+          isSelf={editUser.id === currentUserId}
+          initial={{ ...editUser, password: '' }}
+          lastLoginAt={editUser.lastLoginAt}
+          pages={pages}
+          sites={sites}
+          onSave={(d) => save(editUser.id, d)}
+          onDelete={() => remove(editUser.id)}
+          onCancel={() => setEditing(null)}
+        />
+      )}
     </>
   );
 }
+

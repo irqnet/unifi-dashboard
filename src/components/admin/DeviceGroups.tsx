@@ -1,10 +1,28 @@
 'use client';
 
-import clsx from 'clsx';
-import { ArrowDown, ArrowUp, Check, EyeOff, Loader2, Pencil, Plus, Radio, Router, Server, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, EyeOff, Plus, Radio, Router, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { AdminDevice } from '@/lib/views';
-import { Button, Panel, SectionTitle, Toggle } from '../ui/primitives';
+import { ReorderButton } from './NetworksSection';
+import {
+  CheckRow,
+  ColorDot,
+  ColorPicker,
+  DeleteRow,
+  EmptyRow,
+  FieldRow,
+  Group,
+  LinkButton,
+  LoadingRow,
+  PageHeader,
+  Pill,
+  PrimaryButton,
+  Row,
+  Sheet,
+  SwitchRow,
+  TextInput,
+  type Api,
+} from './ui';
 
 export interface AdminDeviceGroup {
   id: number;
@@ -18,9 +36,6 @@ export interface AdminDeviceGroup {
 
 type Draft = Omit<AdminDeviceGroup, 'id' | 'sortOrder'>;
 const EMPTY: Draft = { name: '', description: '', color: '#38bdf8', hidden: false, deviceMacs: [] };
-const PRESET_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb7185', '#2dd4bf', '#94a3b8'];
-
-type Api = <T>(url: string, init?: RequestInit) => Promise<{ data?: T; error?: string }>;
 
 function DeviceIcon({ type, className }: { type: AdminDevice['type']; className?: string }) {
   return type === 'switch' ? <Router className={className} /> : <Radio className={className} />;
@@ -28,30 +43,34 @@ function DeviceIcon({ type, className }: { type: AdminDevice['type']; className?
 
 function Editor({
   initial,
+  isNew,
   devices,
   groups,
   onSave,
+  onDelete,
   onCancel,
 }: {
   initial: Draft & { id?: number };
+  isNew: boolean;
   devices: AdminDevice[];
   groups: AdminDeviceGroup[];
   onSave: (d: Draft) => Promise<string | null>;
+  onDelete?: () => Promise<void>;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const toggle = (mac: string) =>
     set('deviceMacs', draft.deviceMacs.includes(mac) ? draft.deviceMacs.filter((m) => m !== mac) : [...draft.deviceMacs, mac]);
   const q = filter.trim().toLowerCase();
   const shown = devices.filter((d) => !q || [d.name, d.model, d.mac, d.ip ?? ''].some((x) => x.toLowerCase().includes(q)));
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!draft.name.trim()) return setError('Bitte einen Namen angeben');
+  async function submit() {
+    if (!draft.name.trim()) return setError('Gib der Gruppe einen Namen.');
     setBusy(true);
     setError(null);
     const err = await onSave(draft);
@@ -60,85 +79,62 @@ function Editor({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-sky-500/40 bg-noc-panel p-4">
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-noc-muted">Name</label>
-          <input className="w-full" value={draft.name} maxLength={80} onChange={(e) => set('name', e.target.value)} placeholder="z. B. Rack Keller" autoFocus />
+    <Sheet title={isNew ? 'Neue Geräte-Gruppe' : 'Geräte-Gruppe bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+      <Group>
+        <FieldRow label="Name" htmlFor="dg-name">
+          <TextInput id="dg-name" value={draft.name} maxLength={80} onChange={(e) => set('name', e.target.value)} placeholder="z. B. Rack Keller" />
+        </FieldRow>
+        <FieldRow label="Beschreibung" htmlFor="dg-desc">
+          <TextInput id="dg-desc" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} placeholder="Optional" />
+        </FieldRow>
+        <FieldRow label="Farbe">
+          <ColorPicker value={draft.color} onChange={(c) => set('color', c)} />
+        </FieldRow>
+      </Group>
+
+      <Group title="Geräte" aside={`${draft.deviceMacs.length} ausgewählt`}>
+        <div className="flex items-center gap-2 px-3.5 py-2">
+          <Search className="h-4 w-4 shrink-0 text-noc-muted" />
+          <TextInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Name, Modell, MAC oder IP suchen" aria-label="Geräte filtern" />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-noc-muted">Beschreibung (optional)</label>
-          <input className="w-full" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} />
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-6">
-        <div>
-          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-noc-muted">Farbe</div>
-          <div className="flex items-center gap-1.5">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => set('color', c)}
-                className={clsx('h-6 w-6 rounded-full ring-offset-2 ring-offset-noc-panel', draft.color === c && 'ring-2 ring-white')}
-                style={{ background: c }}
-                aria-label={`Farbe ${c}`}
-              />
-            ))}
-            <input type="color" value={draft.color} onChange={(e) => set('color', e.target.value)} className="!h-7 !w-9 cursor-pointer !p-0.5" aria-label="Eigene Farbe" />
-          </div>
-        </div>
-        <Toggle checked={draft.hidden} onChange={(v) => set('hidden', v)} label="Gruppe auf Statusseite verbergen" />
-      </div>
-      <div>
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-noc-muted">Zugeordnete Geräte ({draft.deviceMacs.length})</span>
-          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filtern nach Name, Modell, MAC, IP" className="!py-1 text-xs sm:w-64" />
-        </div>
-        <div className="grid max-h-72 gap-1.5 overflow-y-auto rounded-lg border border-noc-line bg-noc-bg p-2 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.length === 0 && <p className="p-2 text-sm text-noc-muted">Keine Geräte gefunden.</p>}
-          {shown.map((d) => {
-            const checked = draft.deviceMacs.includes(d.mac);
-            const other = d.groupId !== null && d.groupId !== initial.id ? groups.find((g) => g.id === d.groupId)?.name : undefined;
-            return (
-              <button
-                key={d.mac}
-                type="button"
-                onClick={() => toggle(d.mac)}
-                className={clsx(
-                  'flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition',
-                  checked ? 'border-sky-500/60 bg-sky-500/10' : 'border-noc-line hover:border-slate-500',
-                )}
-              >
-                <span className={clsx('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border', checked ? 'border-sky-400 bg-sky-500 text-slate-950' : 'border-noc-line')}>
-                  {checked && <Check className="h-3 w-3" />}
-                </span>
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5 truncate text-noc-text">
-                    <DeviceIcon type={d.type} className="h-3.5 w-3.5 shrink-0 text-noc-muted" />
-                    {d.name}
-                    {!d.online && <span className="text-[10px] text-rose-300">offline</span>}
-                  </span>
-                  <span className="block truncate font-mono text-[11px] text-noc-muted">
-                    {d.model} · {d.mac}
-                  </span>
-                  {other && <span className="block text-[11px] text-amber-300/80">{checked ? 'wird verschoben aus' : 'aktuell in'} „{other}“</span>}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      {error && <p className="text-sm text-rose-300">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          <X className="h-4 w-4" /> Abbrechen
-        </Button>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Speichern
-        </Button>
-      </div>
-    </form>
+        {shown.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">Keine passenden Geräte.</p>}
+        {shown.map((d) => {
+          const checked = draft.deviceMacs.includes(d.mac);
+          const other = d.groupId !== null && d.groupId !== initial.id ? groups.find((g) => g.id === d.groupId)?.name : undefined;
+          return (
+            <CheckRow
+              key={d.mac}
+              checked={checked}
+              onToggle={() => toggle(d.mac)}
+              icon={<DeviceIcon type={d.type} className="h-4 w-4 shrink-0 text-noc-muted" />}
+              title={
+                <>
+                  {d.name}
+                  {!d.online && <span className="ml-1.5 text-[11px] text-rose-300">offline</span>}
+                </>
+              }
+              subtitle={other ? (checked ? `Wird aus „${other}“ verschoben` : `Derzeit in „${other}“`) : d.model}
+              detail={d.ip ?? undefined}
+            />
+          );
+        })}
+      </Group>
+
+      <Group>
+        <SwitchRow title="Auf dem Dashboard anzeigen" checked={!draft.hidden} onChange={(v) => set('hidden', !v)} />
+      </Group>
+
+      {!isNew && onDelete && (
+        <DeleteRow
+          label="Geräte-Gruppe löschen"
+          confirming={confirmDelete}
+          onAsk={() => setConfirmDelete(true)}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => void onDelete()}
+          hint="Die Geräte bleiben erhalten und erscheinen danach ohne Gruppe."
+        />
+      )}
+    </Sheet>
   );
 }
 
@@ -149,6 +145,7 @@ export function DeviceGroups({
   onShowUngrouped,
   reloadSignal,
   onError,
+  onChanged,
 }: {
   site: string;
   api: Api;
@@ -156,12 +153,13 @@ export function DeviceGroups({
   onShowUngrouped: (v: boolean) => void;
   reloadSignal: number;
   onError: (e: string | null) => void;
+  onChanged: () => void;
 }) {
   const [devices, setDevices] = useState<AdminDevice[]>([]);
   const [groups, setGroups] = useState<AdminDeviceGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<number | 'new' | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [reorder, setReorder] = useState(false);
 
   const reload = useCallback(async () => {
     if (!site) return;
@@ -189,14 +187,16 @@ export function DeviceGroups({
     if (res.error) return res.error;
     setEditing(null);
     await reload();
+    onChanged();
     return null;
   };
 
   const remove = async (id: number) => {
     const res = await api(`/api/admin/device-groups/${id}`, { method: 'DELETE' });
     if (res.error) onError(res.error);
-    setConfirmDelete(null);
+    setEditing(null);
     await reload();
+    onChanged();
   };
 
   const move = async (idx: number, dir: -1 | 1) => {
@@ -213,120 +213,112 @@ export function DeviceGroups({
     else if (res.data) setGroups(res.data.groups);
   };
 
-  const setHidden = async (g: AdminDeviceGroup, hidden: boolean) => {
-    setGroups((list) => list.map((x) => (x.id === g.id ? { ...x, hidden } : x)));
-    const res = await api(`/api/admin/device-groups/${g.id}`, { method: 'PUT', body: JSON.stringify({ hidden }) });
-    if (res.error) onError(res.error);
-  };
-
   const byMac = new Map(devices.map((d) => [d.mac, d]));
-  const ungroupedCount = devices.filter((d) => d.groupId === null).length;
+  const ungrouped = devices.filter((d) => d.groupId === null);
+  const editGroup = typeof editing === 'number' ? groups.find((g) => g.id === editing) : undefined;
 
   return (
-    <section>
-      <SectionTitle
-        icon={<Server className="h-4 w-4" />}
-        right={
-          editing !== 'new' && (
-            <Button variant="primary" onClick={() => setEditing('new')}>
-              <Plus className="h-4 w-4" /> Neue Geräte-Gruppe
-            </Button>
-          )
+    <>
+      <PageHeader
+        title="Geräte"
+        lead="Ordne Switche und Access Points nach Ort oder Zweck, zum Beispiel „Rack Keller“ oder „Obergeschoss“."
+        action={
+          <PrimaryButton onClick={() => setEditing('new')}>
+            <Plus className="h-4 w-4" /> Gruppe
+          </PrimaryButton>
         }
+      />
+
+      <Group
+        title="Gruppen"
+        aside={groups.length > 1 && <LinkButton onClick={() => setReorder((r) => !r)}>{reorder ? 'Fertig' : 'Reihenfolge ändern'}</LinkButton>}
+        footer={groups.length > 0 ? 'In dieser Reihenfolge erscheinen die Gruppen auf der Hardware-Seite.' : undefined}
       >
-        Geräte-Gruppen (Switche &amp; Access Points)
-      </SectionTitle>
-      <div className="space-y-3">
-        <Panel className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div>
-            <div className="text-sm font-medium text-noc-text">Nicht gruppierte Geräte auf Statusseite anzeigen</div>
-            <div className="text-xs text-noc-muted">
-              {ungroupedCount} Gerät{ungroupedCount === 1 ? '' : 'e'} ohne Gruppe erscheinen unter „Switche“ bzw. „Access Points“.
-            </div>
-          </div>
-          <Toggle checked={showUngrouped} onChange={onShowUngrouped} />
-        </Panel>
-
-        {editing === 'new' && <Editor initial={EMPTY} devices={devices} groups={groups} onSave={(d) => save('new', d)} onCancel={() => setEditing(null)} />}
-
-        {!loading && !groups.length && editing !== 'new' && (
-          <Panel className="border-dashed p-6 text-center text-sm text-noc-muted">
-            Noch keine Geräte-Gruppen. Fasse z. B. „Rack Keller“, „Obergeschoss“ oder „Außenbereich“ zusammen.
-          </Panel>
+        {loading && !groups.length && <LoadingRow />}
+        {!loading && !groups.length && (
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Erste Gruppe anlegen</LinkButton>}>
+            Noch keine Geräte-Gruppen. Ohne Gruppe erscheinen alle Geräte unter „Switche“ und „Access Points“.
+          </EmptyRow>
         )}
-
-        {groups.map((g, idx) =>
-          editing === g.id ? (
-            <Editor key={g.id} initial={g} devices={devices} groups={groups} onSave={(d) => save(g.id, d)} onCancel={() => setEditing(null)} />
-          ) : (
-            <Panel key={g.id} className="relative overflow-hidden p-4">
-              <span className="absolute inset-y-0 left-0 w-1" style={{ background: g.color }} />
-              <div className="flex flex-wrap items-start gap-4">
-                <div className="flex flex-col gap-1">
-                  <button type="button" onClick={() => void move(idx, -1)} disabled={idx === 0} className="rounded p-0.5 text-noc-muted hover:bg-noc-raised hover:text-noc-text disabled:opacity-30" aria-label="Nach oben">
+        {groups.map((g, idx) => {
+          const names = g.deviceMacs.map((mac) => byMac.get(mac)?.name ?? mac);
+          const offline = g.deviceMacs.filter((mac) => byMac.get(mac) && !byMac.get(mac)!.online).length;
+          return (
+            <Row
+              key={g.id}
+              icon={<ColorDot color={g.color} />}
+              title={g.name}
+              subtitle={names.length ? names.join(', ') : 'Keine Geräte zugeordnet'}
+              onClick={reorder ? undefined : () => setEditing(g.id)}
+              chevron={!reorder}
+              dim={g.hidden}
+              detail={
+                !reorder && (
+                  <>
+                    {offline > 0 && <Pill tone="danger">{offline} offline</Pill>}
+                    {g.hidden && <Pill icon={<EyeOff className="h-3 w-3" />}>ausgeblendet</Pill>}
+                    <span className="hidden sm:inline">
+                      {g.deviceMacs.length} {g.deviceMacs.length === 1 ? 'Gerät' : 'Geräte'}
+                    </span>
+                  </>
+                )
+              }
+            >
+              {reorder && (
+                <div className="flex gap-1">
+                  <ReorderButton label="Nach oben" disabled={idx === 0} onClick={() => void move(idx, -1)}>
                     <ArrowUp className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => void move(idx, 1)} disabled={idx === groups.length - 1} className="rounded p-0.5 text-noc-muted hover:bg-noc-raised hover:text-noc-text disabled:opacity-30" aria-label="Nach unten">
+                  </ReorderButton>
+                  <ReorderButton label="Nach unten" disabled={idx === groups.length - 1} onClick={() => void move(idx, 1)}>
                     <ArrowDown className="h-4 w-4" />
-                  </button>
+                  </ReorderButton>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-noc-text">{g.name}</h3>
-                    {g.hidden && (
-                      <span className="flex items-center gap-1 rounded bg-rose-500/10 px-1.5 py-0.5 text-[11px] text-rose-300">
-                        <EyeOff className="h-3 w-3" /> verborgen
-                      </span>
-                    )}
-                  </div>
-                  {g.description && <p className="mt-0.5 text-sm text-noc-muted">{g.description}</p>}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {g.deviceMacs.length === 0 && <span className="text-xs text-noc-muted">Keine Geräte zugeordnet</span>}
-                    {g.deviceMacs.map((mac) => {
-                      const d = byMac.get(mac);
-                      return (
-                        <span
-                          key={mac}
-                          className={clsx(
-                            'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ring-1 ring-inset',
-                            d ? 'bg-noc-raised text-noc-text ring-noc-line' : 'bg-rose-500/10 text-rose-300 ring-rose-500/30',
-                          )}
-                          title={d ? `${d.model} · ${mac}` : 'Gerät aktuell nicht im Controller'}
-                        >
-                          {d && <DeviceIcon type={d.type} className="h-3 w-3 text-noc-muted" />}
-                          {d ? d.name : mac}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" onClick={() => setEditing(g.id)} title="Bearbeiten">
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    {confirmDelete === g.id ? (
-                      <>
-                        <Button variant="danger" onClick={() => void remove(g.id)}>
-                          Löschen bestätigen
-                        </Button>
-                        <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
-                          Abbrechen
-                        </Button>
-                      </>
-                    ) : (
-                      <Button variant="ghost" onClick={() => setConfirmDelete(g.id)} title="Löschen">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  <Toggle checked={!g.hidden} onChange={(v) => void setHidden(g, !v)} label={<span className="text-xs">Sichtbar</span>} />
-                </div>
-              </div>
-            </Panel>
-          ),
-        )}
-      </div>
-    </section>
+              )}
+            </Row>
+          );
+        })}
+      </Group>
+
+      {ungrouped.length > 0 && (
+        <Group title="Ohne Gruppe" aside={`${ungrouped.length} ${ungrouped.length === 1 ? 'Gerät' : 'Geräte'}`}>
+          {ungrouped.map((d) => (
+            <Row
+              key={d.mac}
+              icon={
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                  <DeviceIcon type={d.type} className="h-3.5 w-3.5 text-noc-muted" />
+                </span>
+              }
+              title={d.name}
+              subtitle={d.model}
+              detail={
+                <>
+                  {!d.online && <Pill tone="danger">offline</Pill>}
+                  <span className="hidden font-mono text-[12px] sm:inline">{d.ip ?? ''}</span>
+                </>
+              }
+            />
+          ))}
+        </Group>
+      )}
+
+      <Group footer="Ausgeschaltet erscheinen auf der Hardware-Seite nur Geräte, die einer Gruppe angehören.">
+        <SwitchRow title="Geräte ohne Gruppe anzeigen" subtitle="Unter „Switche“ und „Access Points“." checked={showUngrouped} onChange={onShowUngrouped} />
+      </Group>
+
+      {editing === 'new' && <Editor isNew initial={EMPTY} devices={devices} groups={groups} onSave={(d) => save('new', d)} onCancel={() => setEditing(null)} />}
+      {editGroup && (
+        <Editor
+          key={editGroup.id}
+          isNew={false}
+          initial={editGroup}
+          devices={devices}
+          groups={groups}
+          onSave={(d) => save(editGroup.id, d)}
+          onDelete={() => remove(editGroup.id)}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+    </>
   );
 }
