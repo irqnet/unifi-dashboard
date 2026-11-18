@@ -7,9 +7,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # Build nutzt das Host-Netz (BuildKit hat sonst teils kein Netz für apk/npm).
-      # Betrifft nur den Build, nicht den laufenden Container.
-      network: host
     image: localhost/unifi-dashboard:latest
     container_name: unifi-dashboard
     restart: unless-stopped
