@@ -271,6 +271,7 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   const gwDev = data.devices.find((d) => ['ugw', 'udm', 'uxg'].includes(d.type));
   const gwStats = wanH?.['gw_system-stats'] ?? gwDev?.['system-stats'];
   const status = overallStatus(st.error, data.health, data.devices);
+  const degradedByPartial = !st.error && !!st.partialError;
   const wanIp = wanH?.wan_ip ?? gwDev?.wan1?.ip ?? null;
 
   const wan: WanView = {
@@ -300,10 +301,10 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
     sites: sites.map((s) => ({ name: s.name, desc: s.desc || s.name })),
     generatedAt: Date.now(),
     lastPoll: st.lastPoll,
-    error: st.error,
+    error: st.error ?? st.partialError,
     pollingIntervalMs: cfg.pollingIntervalMs,
     isAdmin,
-    status,
+    status: degradedByPartial && status === 'online' ? 'degraded' : status,
     wan,
     gateway,
     totals: {

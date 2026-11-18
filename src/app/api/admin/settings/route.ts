@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
-import { getSettings, updateSettings } from '@/lib/db';
+import { getDbStatus, getSettings, updateSettings } from '@/lib/db';
 import { readJson } from '@/lib/validate';
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const auth = await requireRole('admin');
   if ('error' in auth) return auth.error;
-  return NextResponse.json({ settings: getSettings() });
+  return NextResponse.json({ settings: getSettings(), db: getDbStatus() });
 }
 
 export async function PUT(req: Request) {
