@@ -5,23 +5,34 @@ import {
   AlertTriangle,
   Check,
   Copy,
-  LayoutGrid,
   Loader2,
   Printer,
   RefreshCw,
   Search,
-  Server,
-  Settings2,
   Ticket,
   Trash2,
-  Wifi,
   X,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { SiteInfo } from '@/lib/views';
 import type { VoucherListPayload, VoucherState, VoucherView } from '@/lib/vouchers';
-import { Button, Panel, SectionTitle } from '../ui/primitives';
+import { Button } from '../ui/primitives';
+
+/** Karten und Überschriften im Stil des Admin-Bereichs */
+function Panel({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <div className={clsx('rounded-xl bg-[#141a23] ring-1 ring-inset ring-white/[0.04]', className)}>{children}</div>;
+}
+
+function SectionTitle({ icon, children, right }: { icon?: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white">
+        {icon}
+        {children}
+      </h2>
+      {right}
+    </div>
+  );
+}
 
 async function api<T>(url: string, init?: RequestInit): Promise<{ data?: T; error?: string }> {
   try {
@@ -39,15 +50,6 @@ async function api<T>(url: string, init?: RequestInit): Promise<{ data?: T; erro
     return { data: json };
   } catch (err) {
     return { error: (err as Error).message };
-  }
-}
-
-function readPref(key: string): string {
-  try {
-    const v = window.localStorage.getItem(key);
-    return v ? (JSON.parse(v) as string) : '';
-  } catch {
-    return '';
   }
 }
 
@@ -113,9 +115,8 @@ function printUrl(site: string, ids: string[], layout: 'a4' | 'bon' = 'a4') {
 
 type Filter = 'all' | VoucherState;
 
-export function VoucherManager() {
-  const [sites, setSites] = useState<SiteInfo[]>([]);
-  const [site, setSite] = useState('');
+/** Voucher-Verwaltung, eingebettet im Admin-Bereich (Standort kommt aus der Seitenleiste). */
+export function VoucherManager({ site }: { site: string }) {
   const [data, setData] = useState<VoucherListPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,18 +129,9 @@ export function VoucherManager() {
   const { copied, copy } = useCopy();
 
   useEffect(() => {
-    void (async () => {
-      const s = await api<{ sites: SiteInfo[] }>('/api/unifi/sites');
-      if (s.data) {
-        setSites(s.data.sites);
-        const pref = readPref('ud.site');
-        setSite(s.data.sites.some((x) => x.name === pref) ? pref : (s.data.sites[0]?.name ?? 'default'));
-      } else {
-        setError(s.error ?? 'Sites konnten nicht geladen werden');
-        setLoading(false);
-      }
-    })();
-  }, []);
+    setCreated(null);
+    setSelected(new Set());
+  }, [site]);
 
   const load = useCallback(async () => {
     if (!site) return;
@@ -158,17 +150,6 @@ export function VoucherManager() {
     const t = window.setInterval(() => void load(), 30_000);
     return () => window.clearInterval(t);
   }, [load]);
-
-  function changeSite(s: string) {
-    setSite(s);
-    setCreated(null);
-    setSelected(new Set());
-    try {
-      window.localStorage.setItem('ud.site', JSON.stringify(s));
-    } catch {
-      /* ignore */
-    }
-  }
 
   const counts = useMemo(() => {
     const c = { all: 0, unused: 0, active: 0, expired: 0 };
@@ -230,54 +211,8 @@ export function VoucherManager() {
   const expiredIds = (data?.vouchers ?? []).filter((v) => v.state === 'expired').map((v) => v.id);
   const selectedIds = Array.from(selected);
 
-  return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-noc-line bg-noc-bg/85 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10">
-              <Ticket className="h-4 w-4 text-sky-400" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold leading-tight text-noc-text">Gäste-WLAN · Voucher</div>
-              <select
-                aria-label="Standort"
-                value={site}
-                onChange={(e) => changeSite(e.target.value)}
-                className="mt-0.5 !border-0 !bg-transparent !p-0 !pr-6 text-xs text-noc-muted !ring-0 hover:text-noc-text"
-              >
-                {(sites.length ? sites : [{ name: site, desc: site }]).map((s) => (
-                  <option key={s.name} value={s.name} className="bg-noc-panel">
-                    {s.desc}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <nav className="flex overflow-hidden rounded-lg border border-noc-line" aria-label="Ansicht">
-            <NavTab href="/" icon={<LayoutGrid className="h-3.5 w-3.5" />} label="Netzwerke" />
-            <NavTab href="/hardware" icon={<Server className="h-3.5 w-3.5" />} label="Hardware" />
-            <NavTab href="/vouchers" icon={<Ticket className="h-3.5 w-3.5" />} label="Voucher" active />
-          </nav>
-          {data?.wifi.ssid && (
-            <div className="flex items-center gap-1.5 text-xs text-noc-muted">
-              <Wifi className="h-3.5 w-3.5" />
-              <span className="font-mono text-noc-text">{data.wifi.ssid}</span>
-            </div>
-          )}
-          {data?.mock && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300 ring-1 ring-inset ring-amber-500/30">Demo-Modus</span>}
-          <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={() => void load()} className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-noc-text" aria-label="Aktualisieren">
-              <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
-            </button>
-            <Link href="/admin" className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-noc-text" aria-label="Admin-Bereich" title="Admin-Bereich">
-              <Settings2 className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto grid max-w-[1800px] gap-6 px-4 py-6 lg:grid-cols-[minmax(320px,400px)_1fr] lg:px-6">
+  const grid = (
+    <>
         <div className="space-y-6">
           {data && <CreateForm data={data} site={site} onCreated={(c) => { setCreated(c); void load(); }} />}
           {created && created.length > 0 && (
@@ -411,7 +346,7 @@ export function VoucherManager() {
               <div className="-mx-4 overflow-x-auto">
                 <table className="w-full min-w-[820px] text-sm">
                   <thead>
-                    <tr className="border-b border-noc-line text-left text-[11px] uppercase tracking-wider text-noc-muted">
+                    <tr className="border-b border-noc-line text-left text-[11px] text-noc-muted">
                       <th className="w-10 px-4 py-2">
                         <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} aria-label="Alle auswählen" />
                       </th>
@@ -492,21 +427,33 @@ export function VoucherManager() {
             )}
           </Panel>
         </div>
-      </main>
-    </div>
+    </>
   );
-}
 
-function NavTab({ href, icon, label, active }: { href: string; icon: React.ReactNode; label: string; active?: boolean }) {
   return (
-    <Link
-      href={href}
-      aria-current={active ? 'page' : undefined}
-      className={clsx('flex items-center gap-1.5 px-3 py-1.5 text-sm transition', active ? 'bg-sky-500/20 text-sky-300' : 'text-noc-muted hover:bg-noc-raised hover:text-noc-text')}
-    >
-      {icon}
-      {label}
-    </Link>
+    <>
+      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-white">Voucher</h1>
+          <p className="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-noc-muted">
+            Zugangscodes für das Gäste-WLAN erstellen, drucken und widerrufen.
+            {data?.wifi.ssid && (
+              <>
+                {' '}
+                Netz: <span className="font-mono text-noc-text">{data.wifi.ssid}</span>
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {data?.mock && <span className="rounded-full bg-amber-400/[0.12] px-2 py-px text-[11.5px] font-medium text-amber-300">Demo-Modus</span>}
+          <button type="button" onClick={() => void load()} className="rounded-lg p-1.5 text-noc-muted hover:bg-white/[0.06] hover:text-noc-text" aria-label="Aktualisieren" title="Aktualisieren">
+            <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
+          </button>
+        </div>
+      </div>
+      <div className="grid gap-6 2xl:grid-cols-[minmax(300px,380px)_1fr]">{grid}</div>
+    </>
   );
 }
 
@@ -643,7 +590,7 @@ function PresetOption({ active, onClick, title, children }: { active: boolean; o
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
     <label className={clsx('block', className)}>
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-noc-muted">{label}</span>
+      <span className="mb-1 block text-[11px] font-medium text-noc-muted">{label}</span>
       {children}
     </label>
   );
