@@ -120,6 +120,10 @@ export interface WanView {
   down: number; // aktueller Durchsatz bit/s
   up: number;
   history: TrafficPoint[];
+  /** Kapazität für die Auslastungsanzeige in bit/s und deren Quelle */
+  capacityDown: number | null;
+  capacityUp: number | null;
+  capacitySource: 'config' | 'speedtest' | 'peak' | null;
 }
 
 export interface GatewayView {

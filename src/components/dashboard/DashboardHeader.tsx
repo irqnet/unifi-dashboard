@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { Activity, ArrowDown, ArrowUp, Cpu, Gauge, Globe, LogOut, MemoryStick, Pause, RefreshCw, Settings2, Timer } from 'lucide-react';
+import { Activity, ArrowDown, ArrowUp, LayoutGrid, Server, Cpu, Gauge, Globe, LogOut, MemoryStick, Pause, RefreshCw, Settings2, Timer } from 'lucide-react';
 import Link from 'next/link';
 import { REFRESH_OPTIONS } from '@/lib/constants';
 import { formatBps, formatMbps, formatTime } from '@/lib/format';
@@ -18,6 +18,7 @@ export function DashboardHeader({
   loading,
   onReload,
   onLogout,
+  view,
 }: {
   data: DashboardPayload | null;
   site: string;
@@ -27,7 +28,12 @@ export function DashboardHeader({
   loading: boolean;
   onReload: () => void;
   onLogout: () => void;
+  view: 'network' | 'hardware';
 }) {
+  const tabs = [
+    { key: 'network', href: '/', label: 'Netzwerke', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+    { key: 'hardware', href: '/hardware', label: 'Hardware', icon: <Server className="h-3.5 w-3.5" /> },
+  ] as const;
   return (
     <header className="sticky top-0 z-40 border-b border-noc-line bg-noc-bg/85 backdrop-blur">
       <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 lg:px-6">
@@ -52,6 +58,23 @@ export function DashboardHeader({
           </div>
           {data && <StatusBadge status={data.status} />}
         </div>
+
+        <nav className="flex overflow-hidden rounded-lg border border-noc-line" aria-label="Ansicht">
+          {tabs.map((t) => (
+            <Link
+              key={t.key}
+              href={t.href}
+              aria-current={view === t.key ? 'page' : undefined}
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-1.5 text-sm transition',
+                view === t.key ? 'bg-sky-500/20 text-sky-300' : 'text-noc-muted hover:bg-noc-raised hover:text-noc-text',
+              )}
+            >
+              {t.icon}
+              {t.label}
+            </Link>
+          ))}
+        </nav>
 
         {data && (
           <div className="flex flex-1 flex-wrap items-center gap-x-6 gap-y-2 text-xs">

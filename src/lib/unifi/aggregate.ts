@@ -299,6 +299,18 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
   const degradedByPartial = !st.error && !!st.partialError;
   const wanIp = wanH?.wan_ip ?? gwDev?.wan1?.ip ?? null;
 
+  const xd = num(wwwH?.xput_down);
+  const xu = num(wwwH?.xput_up);
+  const peakDown = Math.max(0, ...samples.map((x) => x.wanDown));
+  const peakUp = Math.max(0, ...samples.map((x) => x.wanUp));
+  const [capacityDown, capacityUp, capacitySource]: [number | null, number | null, WanView['capacitySource']] =
+    cfg.wanDownMbps > 0
+      ? [cfg.wanDownMbps * 1e6, (cfg.wanUpMbps || cfg.wanDownMbps) * 1e6, 'config']
+      : xd && xd > 0
+        ? [xd * 1e6, (xu && xu > 0 ? xu : xd) * 1e6, 'speedtest']
+        : peakDown > 0
+          ? [peakDown, peakUp || null, 'peak']
+          : [null, null, null];
   const wan: WanView = {
     status: !wanH ? 'unknown' : wanH.status === 'ok' ? 'online' : wanH.status === 'error' ? 'offline' : 'degraded',
     ip: mask ? maskIp(wanIp) : wanIp,
@@ -309,6 +321,9 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
     down: latest?.wanDown ?? 0,
     up: latest?.wanUp ?? 0,
     history: samples.map((s) => ({ t: s.t, down: s.wanDown, up: s.wanUp, clients: 0 })),
+    capacityDown,
+    capacityUp,
+    capacitySource,
   };
   const gateway: GatewayView = {
     name: gwDev?.name ?? wanH?.gw_name ?? null,
