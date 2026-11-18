@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0d12;
+  color: #d7dee9;
+}
+
+body {
+  background-image: radial-gradient(1200px 600px at 10% -10%, rgba(56, 189, 248, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(167, 139, 250, 0.05), transparent 60%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(56, 189, 248, 0.3);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #222b38 transparent;
+}
+
+input,
+select,
+textarea {
+  @apply rounded-lg border border-noc-line bg-noc-bg px-3 py-2 text-sm text-noc-text placeholder:text-noc-muted/60 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500;
+}

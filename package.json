@@ -1,0 +1,43 @@
+{
+  "name": "unifi-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UniFi Network Status- & Monitoring-Dashboard mit Passwort-/Turnstile-Gate, Admin-Bereich und VLAN-Gruppierung",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "clsx": "^2.1.1",
+    "jose": "^5.10.0",
+    "lucide-react": "^1.74.0",
+    "next": "15.5.29",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.11.0",
+    "server-only": "^0.0.1",
+    "undici": "^6.29.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.2",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.29",
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.33"
+  }
+}
