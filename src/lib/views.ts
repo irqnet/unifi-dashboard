@@ -123,7 +123,12 @@ export interface WanView {
   /** Kapazität für die Auslastungsanzeige in bit/s und deren Quelle */
   capacityDown: number | null;
   capacityUp: number | null;
-  capacitySource: 'config' | 'speedtest' | 'peak' | null;
+  capacitySource: 'isp' | 'config' | 'speedtest' | 'peak' | null;
+  /** Aktiver WAN-Anschluss (Name aus UniFi, z. B. „Internet 1“) */
+  activeWan: string | null;
+  /** Expected ISP Speeds des aktiven WAN in bit/s */
+  expectedDown: number | null;
+  expectedUp: number | null;
 }
 
 export interface GatewayView {

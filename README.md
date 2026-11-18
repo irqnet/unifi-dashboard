@@ -1,6 +1,6 @@
 # UniFi Network Status- & Monitoring-Dashboard
 
-Echtzeit-Statusseite für UniFi-Netzwerke im NOC-Stil. Seite **Netzwerke** (`/`): WAN-Durchsatz mit Auslastungs-Gauges gegen die ISP-Bandbreite und konsolidierte VLAN-Gruppen mit Live-Traffic-Verlauf. Seite **Hardware** (`/hardware`): Switche mit Port-Matrix und Access Points, nach Geräte-Gruppen geordnet. Geschützt durch ein kombiniertes **Passwort- & Cloudflare-Turnstile-Gate** und einen separaten **Admin-Bereich** zur Gruppierung von Netzwerken/VLANs.
+Echtzeit-Statusseite für UniFi-Netzwerke im NOC-Stil. Seite **Netzwerke** (`/`): WAN-Durchsatz mit Auslastungs-Gauges gegen die in UniFi hinterlegten „Expected ISP Speeds“ des aktiven WAN (inkl. Failover) und konsolidierte VLAN-Gruppen mit Live-Traffic-Verlauf. Seite **Hardware** (`/hardware`): Switche mit Port-Matrix und Access Points, nach Geräte-Gruppen geordnet. Geschützt durch ein kombiniertes **Passwort- & Cloudflare-Turnstile-Gate** und einen separaten **Admin-Bereich** zur Gruppierung von Netzwerken/VLANs.
 
 - **Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS · Lucide · Recharts · SQLite (`better-sqlite3`) · `jose` (JWT)
 - **Betrieb:** lokal gebautes Container-Image mit Podman / `podman-compose` (kein Registry-Build, keine GitHub Actions)
@@ -154,7 +154,7 @@ npm run typecheck
 | `POLLING_INTERVAL_MS` | `5000` | Backend-Pollintervall |
 | `HISTORY_MINUTES` | `30` | Länge des Verlaufs-Ringpuffers |
 | `UNIFI_MOCK` | `false` | Demo-Daten |
-| `WAN_BANDWIDTH_DOWN_MBPS` / `WAN_BANDWIDTH_UP_MBPS` | – | Gebuchte Bandbreite für die WAN-Auslastungsanzeige (sonst letzter Speedtest, sonst Spitzenwert) |
+| `WAN_BANDWIDTH_DOWN_MBPS` / `WAN_BANDWIDTH_UP_MBPS` | – | Fallback-Bandbreite für die WAN-Auslastung, falls in UniFi keine „Expected ISP Speeds“ für das aktive WAN hinterlegt sind (danach: letzter Speedtest, Spitzenwert) |
 | `ACCESS_PASSWORD` | – | Zugangspasswort (leer = nur Turnstile) |
 | `TURNSTILE_ENABLED` | `false` | Turnstile aktivieren |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | – | Turnstile Site Key (Laufzeit) |
