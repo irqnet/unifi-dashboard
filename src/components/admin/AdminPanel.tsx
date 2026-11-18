@@ -61,6 +61,7 @@ export function AdminPanel() {
   const [groups, setGroups] = useState<AdminGroup[]>([]);
   const [showUngrouped, setShowUngrouped] = useState(true);
   const [controllerError, setControllerError] = useState<string | null>(null);
+  const [dbWarning, setDbWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<number | 'new' | null>(null);
@@ -70,13 +71,18 @@ export function AdminPanel() {
     void (async () => {
       const [s, st] = await Promise.all([
         api<{ sites: SiteInfo[] }>('/api/unifi/sites'),
-        api<{ settings: { showUngrouped: boolean } }>('/api/admin/settings'),
+        api<{ settings: { showUngrouped: boolean }; db?: { persistent: boolean; path: string; error: string | null } }>('/api/admin/settings'),
       ]);
       if (s.data) {
         setSites(s.data.sites);
         setSite((cur) => cur || s.data!.sites[0]?.name || 'default');
       }
-      if (st.data) setShowUngrouped(st.data.settings.showUngrouped);
+      if (st.data) {
+        setShowUngrouped(st.data.settings.showUngrouped);
+        if (st.data.db && !st.data.db.persistent) {
+          setDbWarning(`Datenbank ${st.data.db.path} ist nicht beschreibbar (${st.data.db.error}). Änderungen gehen beim Neustart verloren.`);
+        }
+      }
       if (s.error || st.error) setError(s.error ?? st.error ?? null);
     })();
   }, []);
@@ -202,6 +208,12 @@ export function AdminPanel() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-8 px-4 py-6">
+        {dbWarning && (
+          <div className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>{dbWarning}</div>
+          </div>
+        )}
         {(error || controllerError) && (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

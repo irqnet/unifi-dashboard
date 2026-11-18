@@ -82,7 +82,7 @@ Für Tests ohne echte Keys bietet Cloudflare Dummy-Keys an (Site `1x000000000000
 6. **Datenschutz:** *Anonymisieren* ersetzt Hostnamen/IP/MAC der Clients (z. B. Gäste-VLAN) durch „Client n“. *Sichtbar* aus blendet die Gruppe von der Statusseite aus.
 7. **Netzwerk-Tabelle:** Einzelne VLANs komplett ausblenden oder anonymisieren; Schalter *„Nicht gruppierte VLANs auf Statusseite anzeigen“* steuert, ob ungruppierte Netzwerke als Einzelkarten erscheinen.
 
-Alle Einstellungen liegen in `data/dashboard.db` (SQLite, WAL-Modus).
+Alle Einstellungen liegen in `data/dashboard.db` (SQLite, WAL-Modus). Ist das Verzeichnis nicht beschreibbar, läuft das Dashboard mit einer In-Memory-Datenbank weiter, der Admin-Bereich zeigt eine Warnung und das Log nennt Pfad und UID.
 
 ## Lokales Deployment mit Podman
 
@@ -124,10 +124,10 @@ git pull && podman-compose up -d --build
 | Variable | Standard | Zweck |
 |---|---|---|
 | `HOST_PORT` | `3004` | externer Port |
-| `DATA_PATH` | `./data` | Host-Pfad für die SQLite-DB |
+| `DATA_PATH` | `./data` | Host-Pfad für die SQLite-DB, oder `unifi-dashboard-data` für das benannte Volume (Rechte automatisch korrekt) |
 | `USERNS_MODE` | leer | Rootless Podman: `keep-id:uid=1000,gid=1000` |
 
-**Docker statt Podman:** Das Datenverzeichnis muss für UID 1000 beschreibbar sein: `mkdir -p data && sudo chown 1000:1000 data` (bzw. für den unter `DATA_PATH` gesetzten Pfad).
+**Docker statt Podman:** Am einfachsten `DATA_PATH=unifi-dashboard-data` setzen (benanntes Volume). Alternativ muss das Datenverzeichnis für UID 1000 beschreibbar sein: `mkdir -p data && sudo chown 1000:1000 data` (bzw. für den unter `DATA_PATH` gesetzten Pfad).
 
 ## Entwicklung
 

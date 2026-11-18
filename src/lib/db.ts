@@ -40,19 +40,57 @@ export interface GroupInput {
   networkIds?: string[];
 }
 
-const g = globalThis as unknown as { __udDb?: Database.Database };
+const g = globalThis as unknown as { __udDb?: Database.Database; __udDbStatus?: DbStatus };
 
+export interface DbStatus {
+  persistent: boolean;
+  path: string;
+  error: string | null;
+}
+
+function openFileDb(file: string): Database.Database {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.accessSync(path.dirname(file), fs.constants.W_OK);
+  const db = new Database(file);
+  db.pragma('journal_mode = WAL');
+  return db;
+}
+
+/**
+ * Öffnet die SQLite-DB. Ist das Datenverzeichnis nicht beschreibbar, wird mit einer
+ * In-Memory-DB weitergearbeitet (Dashboard bleibt nutzbar, Admin-Einstellungen gehen
+ * beim Neustart verloren) und eine klare Fehlermeldung geloggt.
+ */
 export function getDb(): Database.Database {
   if (g.__udDb) return g.__udDb;
-  const dir = path.resolve(getConfig().dataDir);
-  fs.mkdirSync(dir, { recursive: true });
-  const db = new Database(path.join(dir, 'dashboard.db'));
-  db.pragma('journal_mode = WAL');
+  const file = path.join(path.resolve(getConfig().dataDir), 'dashboard.db');
+  let db: Database.Database;
+  try {
+    db = openFileDb(file);
+    g.__udDbStatus = { persistent: true, path: file, error: null };
+  } catch (err) {
+    const uid = typeof process.getuid === 'function' ? process.getuid() : '?';
+    const gid = typeof process.getgid === 'function' ? process.getgid() : '?';
+    const msg = (err as Error).message;
+    console.error(
+      `[db] Datenbank ${file} kann nicht geöffnet werden (${msg}). ` +
+        `Prozess läuft als UID ${uid}/GID ${gid} – das Datenverzeichnis muss für diese UID beschreibbar sein ` +
+        `(Host: "chown -R ${uid}:${gid} <pfad-zu>/data" oder DATA_PATH auf ein benanntes Volume setzen). ` +
+        `Fallback: In-Memory-Datenbank, Admin-Einstellungen werden NICHT gespeichert.`,
+    );
+    db = new Database(':memory:');
+    g.__udDbStatus = { persistent: false, path: file, error: `${msg} (UID ${uid})` };
+  }
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   migrate(db);
   g.__udDb = db;
   return db;
+}
+
+export function getDbStatus(): DbStatus {
+  getDb();
+  return g.__udDbStatus!;
 }
 
 function migrate(db: Database.Database) {

@@ -43,7 +43,9 @@ services:
       # extern 3004 → intern 3000
       - "${HOST_PORT:-3004}:3000"
     volumes:
-      # :Z = privates SELinux-Label, damit der Container schreiben darf
+      # :Z = privates SELinux-Label, damit der Container schreiben darf.
+      # DATA_PATH=unifi-dashboard-data nutzt stattdessen das benannte Volume unten
+      # (wird automatisch mit den richtigen Rechten für UID 1000 angelegt).
       - ${DATA_PATH:-./data}:/app/data:Z
     # Rootless Podman: USERNS_MODE=keep-id:uid=1000,gid=1000 setzen, damit der Host-User
     # im Container UID 1000 (node) ist und ./data ohne chown beschreibbar ist (Podman >= 4.3).
@@ -67,3 +69,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+volumes:
+  unifi-dashboard-data:

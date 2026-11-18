@@ -51,6 +51,8 @@ export interface SiteState {
   lastPoll: number | null;
   lastAttempt: number | null;
   error: string | null;
+  /** Fehler einzelner Endpunkte bei ansonsten erfolgreichem Poll */
+  partialError: string | null;
   history: RingBuffer<Sample>;
   networksFetchedAt: number;
 }
@@ -141,6 +143,7 @@ class Poller {
         lastPoll: null,
         lastAttempt: null,
         error: null,
+        partialError: null,
         history: new RingBuffer<Sample>(this.capacity()),
         networksFetchedAt: 0,
       };
@@ -153,13 +156,29 @@ class Poller {
     if (this.cfg.unifi.mock) return mockSiteData(st.site);
     const api = this.api();
     const needNetworks = !st.data || Date.now() - st.networksFetchedAt > NETWORK_CACHE_MS;
-    const [devices, clients, health, networks] = await Promise.all([
+    const results = await Promise.allSettled([
       api.devices(st.site),
       api.clients(st.site),
       api.health(st.site),
       needNetworks ? api.networks(st.site) : Promise.resolve(st.data!.networks),
     ]);
-    if (needNetworks) st.networksFetchedAt = Date.now();
+    // Einzelne fehlerhafte Endpunkte nicht den ganzen Poll kippen lassen:
+    // letzten bekannten Stand weiterverwenden, Fehler aber melden.
+    const prev = st.data;
+    const errors: string[] = [];
+    const pick = <T>(r: PromiseSettledResult<T>, fallback: T | undefined): T => {
+      if (r.status === 'fulfilled') return r.value;
+      errors.push((r.reason as Error)?.message ?? String(r.reason));
+      if (fallback === undefined) throw r.reason;
+      return fallback;
+    };
+    const devices = pick(results[0], prev?.devices ?? []);
+    const clients = pick(results[1], prev?.clients ?? []);
+    const health = pick(results[2], prev?.health ?? []);
+    const networks = pick(results[3], prev?.networks ?? []);
+    if (results.every((r) => r.status === 'rejected')) throw new Error(errors[0]);
+    if (needNetworks && results[3].status === 'fulfilled') st.networksFetchedAt = Date.now();
+    st.partialError = errors.length ? errors.join(' · ') : null;
     return { devices, clients, health, networks };
   }
 
@@ -194,7 +213,9 @@ class Poller {
     } catch (err) {
       st.error = (err as Error).message || 'Unbekannter Fehler';
       console.error(`[unifi] Poll für Site "${site}" fehlgeschlagen:`, st.error);
+      return;
     }
+    if (st.partialError) console.warn(`[unifi] Poll für Site "${site}" teilweise fehlgeschlagen:`, st.partialError);
   }
 
   private async tick() {

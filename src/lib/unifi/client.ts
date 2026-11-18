@@ -22,6 +22,27 @@ export class UniFiError extends Error {
   }
 }
 
+/**
+ * Robustes JSON-Parsing: Manche Controller-Firmwares liefern nicht-standardkonforme Zahlen
+ * (NaN, Infinity, nan, inf) z. B. in Temperatur- oder Statistikfeldern. Diese werden zu null.
+ */
+export function parseUniFiJson<T>(text: string, path: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const sanitized = text.replace(/([:\[,]\s*)-?(?:NaN|nan|-nan|Infinity|inf|-inf)(?=\s*[,}\]])/g, '$1null');
+    try {
+      return JSON.parse(sanitized) as T;
+    } catch (err) {
+      const msg = (err as Error).message;
+      const pos = Number(/position (\d+)/.exec(msg)?.[1] ?? NaN);
+      const ctx = Number.isFinite(pos) ? sanitized.slice(Math.max(0, pos - 80), pos + 80).replace(/\s+/g, ' ') : '';
+      console.error(`[unifi] Ungültiges JSON von ${path} (${text.length} Bytes): ${msg}${ctx ? `\n  Kontext: …${ctx}…` : ''}`);
+      throw new UniFiError(`Ungültige Antwort von ${path}: ${msg}`);
+    }
+  }
+}
+
 export class UniFiClient {
   private dispatcher: Dispatcher;
   private flavor: Flavor | null = null;
@@ -151,7 +172,7 @@ export class UniFiClient {
       await res.text().catch(() => '');
       throw new UniFiError(`UniFi-API ${path}: HTTP ${res.status}`, res.status);
     }
-    const json = (await res.json()) as UniFiEnvelope<T> | T[];
+    const json = parseUniFiJson<UniFiEnvelope<T> | T[]>(await res.text(), path);
     if (Array.isArray(json)) return json;
     if (json.meta?.rc === 'error') throw new UniFiError(`UniFi-API ${path}: ${json.meta.msg ?? 'Fehler'}`);
     return json.data ?? [];

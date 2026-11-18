@@ -38,7 +38,7 @@ export function getConfig() {
       controllerType: str('UNIFI_CONTROLLER_TYPE', 'auto').toLowerCase(),
       verifySsl: bool('UNIFI_VERIFY_SSL', true),
       mock: bool('UNIFI_MOCK', false),
-      requestTimeoutMs: int('UNIFI_TIMEOUT_MS', 8000, 1000),
+      requestTimeoutMs: int('UNIFI_TIMEOUT_MS', 15000, 1000),
     },
     pollingIntervalMs: int('POLLING_INTERVAL_MS', 5000, 1000),
     historyMinutes: int('HISTORY_MINUTES', 30, 5),
