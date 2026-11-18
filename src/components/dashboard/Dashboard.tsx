@@ -29,9 +29,18 @@ function writePref(key: string, value: unknown) {
   }
 }
 
-export type DashboardView = 'network' | 'hardware';
+export type DashboardView = 'network' | 'hardware' | 'status';
 
-export function Dashboard({ defaultRefreshMs, view }: { defaultRefreshMs: number; view: DashboardView }) {
+export function Dashboard({
+  defaultRefreshMs,
+  view,
+  endpoint,
+}: {
+  defaultRefreshMs: number;
+  view: DashboardView;
+  /** Abweichende Datenquelle (Statusseite: /api/status/<slug>) */
+  endpoint?: string;
+}) {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [site, setSite] = useState<string>('');
   const [refreshMs, setRefreshMs] = useState(defaultRefreshMs);
@@ -51,15 +60,18 @@ export function Dashboard({ defaultRefreshMs, view }: { defaultRefreshMs: number
     abortRef.current = ctrl;
     setLoading(true);
     try {
-      const res = await fetch(`/api/unifi/dashboard${site ? `?site=${encodeURIComponent(site)}` : ''}`, {
-        cache: 'no-store',
-        signal: ctrl.signal,
-      });
+      const url = endpoint ?? `/api/unifi/dashboard${site ? `?site=${encodeURIComponent(site)}` : ''}`;
+      const res = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+      if (endpoint && (res.status === 401 || res.status === 403)) {
+        // Statusseite: Server zeigt Login bzw. „Kein Zugriff“
+        window.location.reload();
+        return;
+      }
       if (res.status === 401) {
         window.location.assign('/gate');
         return;
       }
-      if (res.status === 404 && site) {
+      if (res.status === 404 && site && !endpoint) {
         setSite('');
         writePref('ud.site', '');
         return;
@@ -74,7 +86,7 @@ export function Dashboard({ defaultRefreshMs, view }: { defaultRefreshMs: number
     } finally {
       if (abortRef.current === ctrl) setLoading(false);
     }
-  }, [site]);
+  }, [site, endpoint]);
 
   useEffect(() => {
     void load();
@@ -164,6 +176,29 @@ export function Dashboard({ defaultRefreshMs, view }: { defaultRefreshMs: number
               </>
             )}
             {view === 'hardware' && <HardwareSection data={data} />}
+            {view === 'status' && (
+              <>
+                {data.statusPage?.description && <p className="text-sm text-noc-muted">{data.statusPage.description}</p>}
+                {data.statusPage?.showWan && <WanPanel data={data} />}
+                {data.groups.length > 0 && (
+                  <section>
+                    <SectionTitle icon={<Layers className="h-4 w-4" />}>Netzwerke & VLAN-Gruppen</SectionTitle>
+                    <NetworkSection
+                      groups={data.groups}
+                      networks={data.networks}
+                      ungrouped={[]}
+                      onOpen={(t) => setSelected(t.kind === 'group' ? { kind: 'group', id: t.group.id } : { kind: 'network', id: t.network.id })}
+                    />
+                  </section>
+                )}
+                {data.deviceGroups.length > 0 && <HardwareSection data={data} />}
+                {!data.groups.length && !data.deviceGroups.length && !data.statusPage?.showWan && (
+                  <div className="rounded-xl border border-dashed border-noc-line p-8 text-center text-sm text-noc-muted">
+                    Dieser Statusseite sind noch keine Gruppen zugeordnet.
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
       </main>

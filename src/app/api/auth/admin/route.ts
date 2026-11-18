@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { clearRateLimit, getClientIp, getSession, rateLimited, safeEqual } from '@/lib/auth';
+import { getUser } from '@/lib/db';
 import { getAuthConfig } from '@/lib/env';
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from '@/lib/session';
 
@@ -35,11 +36,16 @@ export async function POST(req: Request) {
   return res;
 }
 
-/** Admin-Rechte abgeben (zurück auf viewer). */
+/** Admin-Rechte abgeben (Benutzerkonto → user, gemeinsamer Zugang → viewer). */
 export async function DELETE() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+  const user = session.uid !== undefined ? getUser(session.uid) : null;
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, await createSessionToken('viewer'), sessionCookieOptions());
+  res.cookies.set(
+    SESSION_COOKIE,
+    user ? await createSessionToken('user', user) : await createSessionToken('viewer'),
+    sessionCookieOptions(),
+  );
   return res;
 }

@@ -34,14 +34,16 @@ Browser ──► middleware.ts (JWT-Cookie prüfen: viewer / admin)
 | Bereich | Erforderliche Rolle | Ohne Berechtigung |
 |---|---|---|
 | `/gate`, `/api/auth/verify`, `/api/health` | – (öffentlich) | – |
-| `/`, `/hardware`, `/api/unifi/*` | `viewer` oder `admin` | Gate-Seite bzw. `401` |
+| `/`, `/hardware`, `/api/unifi/*` | `viewer` oder `admin` | Gate-Seite bzw. `401`; Rolle `user` → eigene Statusseiten |
+| `/s/<adresse>`, `/api/status/<adresse>` | öffentlich markierte Seite, `viewer`, `admin` oder `user` mit Zuweisung | Gate-Seite bzw. `401/403` |
 | `/admin/login`, `/api/auth/admin` | gültige Session | Gate-Seite bzw. `401` |
 | `/admin`, `/vouchers`, `/api/admin/*` (GET/POST/PUT/DELETE) | `admin` | Admin-Login bzw. `401/403` |
 
 1. **Zugangs-Gate:** Verlangt `ACCESS_PASSWORD` (falls gesetzt) und/oder Cloudflare Turnstile (`TURNSTILE_ENABLED=true`). Das Passwort wird per `crypto.timingSafeEqual` (über SHA-256-Digests, längenunabhängig) verglichen, das Turnstile-Token serverseitig gegen `https://challenges.cloudflare.com/turnstile/v0/siteverify` geprüft – inkl. Client-IP aus `CF-Connecting-IP` / `X-Forwarded-For`. Erfolg ⇒ signiertes JWT-Cookie `ud_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, `role: "viewer"`).
 2. **Admin:** Über das Zahnrad im Header ⇒ `/admin/login` ⇒ `ADMIN_PASSWORD` (ebenfalls timing-safe) hebt das JWT auf `role: "admin"` an. „Admin beenden“ stuft wieder auf `viewer` zurück.
 3. **Defense-in-Depth:** Zusätzlich zur Middleware prüft jeder Route Handler die Rolle erneut. Login-Endpunkte sind per IP rate-limitiert (10 Versuche / 5 min).
-4. **Datenschutz:** `HIDE_SENSITIVE_IPS=true` maskiert WAN-IP und Client-MACs für Nicht-Admins. Pro Netzwerk/Gruppe können Clients anonymisiert oder Netzwerke komplett ausgeblendet werden.
+4. **Benutzerkonten:** Im Admin-Bereich angelegte Benutzer melden sich am Gate mit Benutzername + Passwort an (scrypt-Hash in SQLite). Rolle **Admin** = Vollzugriff, Rolle **Betrachter** (`user`) = nur die zugewiesenen Statusseiten; die API liefert serverseitig nur deren Gruppen. Passwortwechsel, Sperre, Rollenwechsel oder Löschen beenden laufende Sitzungen sofort. Optional lässt sich der gemeinsame Zugang (Gate ohne Konto, Rolle `viewer`) abschalten.
+5. **Datenschutz:** `HIDE_SENSITIVE_IPS=true` maskiert WAN-IP und Client-MACs für Nicht-Admins. Pro Netzwerk/Gruppe können Clients anonymisiert oder Netzwerke komplett ausgeblendet werden.
 
 > Fehlt `SESSION_SECRET` (≥ 32 Zeichen) oder ist Turnstile aktiviert aber unvollständig konfiguriert, zeigt das Gate einen Konfigurationsfehler statt sich zu öffnen.
 
@@ -85,6 +87,12 @@ Für Tests ohne echte Keys bietet Cloudflare Dummy-Keys an (Site `1x000000000000
 8. **Geräte-Gruppen (Switche & Access Points):** Unter *Neue Geräte-Gruppe* Switche und APs (Name · Modell · MAC, mit Filter) zu Gruppen wie „Rack Keller“ oder „Außenbereich“ zusammenfassen. Die Zuordnung erfolgt über die MAC-Adresse und bleibt bei Umbenennungen erhalten. Gruppen lassen sich sortieren und ausblenden; nicht gruppierte Geräte erscheinen darunter als „Weitere Switche“ / „Weitere Access Points“ (abschaltbar).
 
 Alle Einstellungen liegen in `data/dashboard.db` (SQLite, WAL-Modus). Ist das Verzeichnis nicht beschreibbar, läuft das Dashboard mit einer In-Memory-Datenbank weiter, der Admin-Bereich zeigt eine Warnung und das Log nennt Pfad und UID.
+
+## Statusseiten & Benutzer
+
+Im Admin-Bereich unter **Statusseiten** legst du Seiten mit eigener Adresse (`/s/gebaeude-a`) an und wählst dafür VLAN-Gruppen, Geräte-Gruppen und optional den WAN-Durchsatz. Auch im Hauptdashboard verborgene Gruppen können auf einer Statusseite erscheinen. Eine Seite kann **öffentlich** geschaltet werden (ohne Login und ohne Turnstile, z. B. für einen Wandmonitor; MACs und WAN-IP bleiben maskiert).
+
+Unter **Benutzer** legst du Konten an und gibst ihnen eine oder mehrere Statusseiten frei. Nach dem Login landet ein Betrachter direkt auf seiner Seite (bei mehreren auf einer Übersicht unter `/start`). Voucher, Hardware-Gesamtansicht und Admin bleiben gesperrt.
 
 ## Gäste-WLAN-Voucher (`/vouchers`)
 
@@ -187,7 +195,8 @@ npm run typecheck
 
 | Methode | Pfad | Rolle | Zweck |
 |---|---|---|---|
-| `POST` | `/api/auth/verify` | – | Gate: Passwort + Turnstile ⇒ viewer-Session |
+| `POST` | `/api/auth/verify` | – | Gate: Turnstile + Benutzerkonto (⇒ user/admin) oder Zugangspasswort (⇒ viewer) |
+| `GET` | `/api/status/:adresse` | siehe oben | Daten einer Statusseite (nur deren Gruppen) |
 | `POST` / `DELETE` | `/api/auth/admin` | Session | Admin-Upgrade / zurück auf viewer |
 | `POST` | `/api/auth/logout` | – | Session löschen |
 | `GET` | `/api/health` | – | Health-Check |
@@ -202,5 +211,9 @@ npm run typecheck
 | `PUT` / `DELETE` | `/api/admin/device-groups/:id` | admin | Geräte-Gruppe ändern/löschen |
 | `PUT` | `/api/admin/device-groups/order` | admin | Reihenfolge der Geräte-Gruppen |
 | `GET` / `PUT` | `/api/admin/settings` | admin | Globale Einstellungen |
+| `GET` / `POST` | `/api/admin/status-pages` | admin | Statusseiten lesen/anlegen |
+| `PUT` / `DELETE` | `/api/admin/status-pages/:id` | admin | Statusseite ändern/löschen |
+| `GET` / `POST` | `/api/admin/users` | admin | Benutzer lesen/anlegen |
+| `PUT` / `DELETE` | `/api/admin/users/:id` | admin | Benutzer ändern/löschen |
 | `GET` / `POST` | `/api/admin/vouchers?site=` | admin | Voucher + Vorlagen lesen / Voucher erstellen |
 | `POST` | `/api/admin/vouchers/delete` | admin | Voucher widerrufen (`{ site, ids }`) |
