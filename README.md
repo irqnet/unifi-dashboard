@@ -74,17 +74,19 @@ Für Tests ohne echte Keys bietet Cloudflare Dummy-Keys an (Site `1x000000000000
 
 ## Admin-Anleitung (`/admin`)
 
-1. Im Dashboard oben rechts auf das **Zahnrad** klicken und mit `ADMIN_PASSWORD` anmelden.
-2. **Standort** im Header wählen – die Netzwerke/VLANs werden live aus `rest/networkconf` geladen.
-3. **Neue Gruppe** anlegen (z. B. „Gäste & Nachbarn“), Farbe wählen und per Multi-Select beliebig viele Netzwerke (Name · VLAN · Subnetz) zuordnen. Ein Netzwerk gehört immer zu höchstens einer Gruppe – wird es einer neuen Gruppe zugewiesen, wird es aus der alten verschoben.
-4. **Anzeige-Modus** je Gruppe:
-   - *Konsolidiert:* eine Karte mit summierten Clients (LAN/WLAN), kombiniertem Traffic und gemeinsamem Verlaufsgraph. Klick öffnet den Drill-Down mit VLAN-Aufschlüsselung und Top-Clients.
-   - *Einzelkarten je VLAN:* Gruppen-Überschrift mit Summen, darunter je VLAN eine eigene Karte.
-5. **Reihenfolge** mit den Pfeilen ändern – sie bestimmt die Anordnung auf dem Dashboard.
-6. **Datenschutz:** *Anonymisieren* ersetzt Hostnamen/IP/MAC der Clients (z. B. Gäste-VLAN) durch „Client n“. *Sichtbar* aus blendet die Gruppe von der Statusseite aus.
-7. **Netzwerk-Tabelle:** Einzelne VLANs komplett ausblenden oder anonymisieren; Schalter *„Nicht gruppierte VLANs auf Statusseite anzeigen“* steuert, ob ungruppierte Netzwerke als Einzelkarten erscheinen.
+Der Admin-Bereich ist wie die macOS-Systemeinstellungen aufgebaut: links eine Seitenleiste mit **Standort** und den Bereichen *Netzwerke*, *Geräte*, *Statusseiten*, *Benutzer*, *Voucher* und *Allgemein* (auf dem Handy als Listen-Navigation). Die Adresse merkt sich den Bereich (`/admin?bereich=geraete`). Gruppen, Seiten und Konten werden per Klick in einem eigenen Fenster bearbeitet (Abbrechen / Sichern, Löschen unten).
 
-8. **Geräte-Gruppen (Switche & Access Points):** Unter *Neue Geräte-Gruppe* Switche und APs (Name · Modell · MAC, mit Filter) zu Gruppen wie „Rack Keller“ oder „Außenbereich“ zusammenfassen. Die Zuordnung erfolgt über die MAC-Adresse und bleibt bei Umbenennungen erhalten. Gruppen lassen sich sortieren und ausblenden; nicht gruppierte Geräte erscheinen darunter als „Weitere Switche“ / „Weitere Access Points“ (abschaltbar).
+1. Im Dashboard oben rechts auf das **Zahnrad** klicken und mit `ADMIN_PASSWORD` anmelden.
+2. **Standort** oben in der Seitenleiste wählen – die Netzwerke/VLANs werden live aus `rest/networkconf` geladen.
+3. **Netzwerke → + Gruppe** (z. B. „Gäste & Nachbarn“): Farbe wählen und per Häkchen beliebig viele Netzwerke zuordnen. Ein Netzwerk gehört immer zu höchstens einer Gruppe – wird es einer neuen Gruppe zugewiesen, wird es aus der alten verschoben.
+4. **Darstellung** je Gruppe:
+   - *Zusammengefasst:* eine Karte mit summierten Clients (LAN/WLAN), kombiniertem Traffic und gemeinsamem Verlaufsgraph. Klick öffnet den Drill-Down mit VLAN-Aufschlüsselung und Top-Clients.
+   - *Einzeln je VLAN:* Gruppen-Überschrift mit Summen, darunter je VLAN eine eigene Karte.
+5. **Reihenfolge ändern** (Link über der Gruppenliste) – bestimmt die Anordnung auf dem Dashboard.
+6. **Datenschutz:** *Hostnamen anonymisieren* ersetzt Hostnamen/IP/MAC der Clients (z. B. Gäste-VLAN) durch „Client n“. *Auf dem Dashboard anzeigen* aus blendet die Gruppe aus.
+7. **Alle Netzwerke:** Einzelne VLANs ausblenden (*Anzeigen*) oder anonymisieren (*Anonym*); *„Netzwerke ohne Gruppe anzeigen“* steuert, ob ungruppierte Netzwerke als Einzelkarten erscheinen.
+8. **Geräte:** Switche und APs (Name · Modell · MAC, mit Suche) zu Gruppen wie „Rack Keller“ oder „Außenbereich“ zusammenfassen. Die Zuordnung erfolgt über die MAC-Adresse und bleibt bei Umbenennungen erhalten. Gruppen lassen sich sortieren und ausblenden; nicht gruppierte Geräte erscheinen als „Weitere Switche“ / „Weitere Access Points“ (abschaltbar).
+9. **Allgemein:** Zustand von Controller und Datenbank, Daten neu laden, „Admin beenden“ und Abmelden.
 
 Alle Einstellungen liegen in `data/dashboard.db` (SQLite, WAL-Modus). Ist das Verzeichnis nicht beschreibbar, läuft das Dashboard mit einer In-Memory-Datenbank weiter, der Admin-Bereich zeigt eine Warnung und das Log nennt Pfad und UID.
 
@@ -94,9 +96,9 @@ Im Admin-Bereich unter **Statusseiten** legst du Seiten mit eigener Adresse (`/s
 
 Unter **Benutzer** legst du Konten an und gibst ihnen eine oder mehrere Statusseiten frei. Nach dem Login landet ein Betrachter direkt auf seiner Seite (bei mehreren auf einer Übersicht unter `/start`). Voucher, Hardware-Gesamtansicht und Admin bleiben gesperrt.
 
-## Gäste-WLAN-Voucher (`/vouchers`)
+## Gäste-WLAN-Voucher (Admin → Voucher)
 
-Ausstellung von UniFi-Hotspot-Vouchern direkt im Dashboard – funktional angelehnt an [glenndehaan/unifi-voucher-site](https://github.com/glenndehaan/unifi-voucher-site) (MIT-Lizenz, © Glenn de Haan), hier nativ neu implementiert. Nur für Admins sichtbar (Tab „Voucher“ im Header bzw. direkt `/vouchers`).
+Ausstellung von UniFi-Hotspot-Vouchern direkt im Dashboard – funktional angelehnt an [glenndehaan/unifi-voucher-site](https://github.com/glenndehaan/unifi-voucher-site) (MIT-Lizenz, © Glenn de Haan), hier nativ neu implementiert. Nur für Admins, im Admin-Bereich unter **Voucher** (Tab „Voucher“ im Dashboard-Header führt dorthin; alte Links auf `/vouchers` werden weitergeleitet).
 
 - **Erstellen:** Vorlagen aus `VOUCHER_PRESETS` oder benutzerdefiniert (Gültigkeit, einmalig / n Geräte / unbegrenzt, Down-/Upload-Limit, Datenvolumen), Anzahl (Stapel) und Notiz. Die neuen Codes werden sofort angezeigt (Klick = kopieren).
 - **Liste:** Status (Unbenutzt / Aktiv / Abgelaufen), Nutzung, Limits, Notiz, verbundene Gastgeräte (`stat/guest`), Ablaufzeit; Filter und Suche nach Code, Notiz oder Gerät.
