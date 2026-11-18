@@ -73,6 +73,7 @@ export interface PortView {
 
 export interface SwitchView {
   id: string;
+  mac: string;
   name: string;
   model: string;
   ip: string | null;
@@ -96,6 +97,7 @@ export interface RadioView {
 
 export interface ApView {
   id: string;
+  mac: string;
   name: string;
   model: string;
   ip: string | null;
@@ -151,6 +153,30 @@ export interface DashboardPayload {
   ungrouped: string[];
   switches: SwitchView[];
   aps: ApView[];
+  /** Geräte-Gruppen in Admin-Reihenfolge (verborgene Gruppen sind nicht enthalten) */
+  deviceGroups: DeviceGroupView[];
+  /** IDs nicht gruppierter Switche/APs (leer, wenn im Admin-Bereich ausgeblendet) */
+  ungroupedSwitches: string[];
+  ungroupedAps: string[];
+}
+
+export interface DeviceGroupView {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  switchIds: string[];
+  apIds: string[];
+}
+
+export interface AdminDevice {
+  mac: string;
+  name: string;
+  model: string;
+  type: 'switch' | 'ap';
+  ip: string | null;
+  online: boolean;
+  groupId: number | null;
 }
 
 export interface AdminNetwork {

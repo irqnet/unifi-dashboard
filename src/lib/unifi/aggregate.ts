@@ -4,9 +4,11 @@
  */
 import 'server-only';
 import { getConfig } from '../env';
-import { getSettings, listGroups, listNetworkSettings } from '../db';
+import { getSettings, listDeviceGroups, listGroups, listNetworkSettings } from '../db';
 import type {
+  AdminDevice,
   AdminNetwork,
+  DeviceGroupView,
   ApView,
   ClientCounts,
   ClientRow,
@@ -226,6 +228,7 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
       const temp = num(d.general_temperature) ?? (d.temperatures?.length ? Math.max(...d.temperatures.map((t) => t.value)) : null);
       return {
         id: d._id,
+        mac: d.mac.toLowerCase(),
         name: d.name || d.model || d.mac,
         model: d.model_name || d.model || '',
         ip: d.ip ?? null,
@@ -252,6 +255,7 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
       }));
       return {
         id: d._id,
+        mac: d.mac.toLowerCase(),
         name: d.name || d.model || d.mac,
         model: d.model_name || d.model || '',
         ip: d.ip ?? null,
@@ -264,6 +268,27 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
         up: ((d['rx_bytes-r'] ?? d.uplink?.['tx_bytes-r']) ?? 0) * 8,
       };
     });
+
+  // --- Geräte-Gruppen -----------------------------------------------------------
+  const devGroups = listDeviceGroups(site);
+  const devGroupOf = new Map<string, (typeof devGroups)[number]>();
+  devGroups.forEach((g) => g.deviceMacs.forEach((m) => devGroupOf.set(m, g)));
+  const deviceGroups: DeviceGroupView[] = devGroups
+    .filter((g) => !g.hidden)
+    .map((g) => ({
+      id: String(g.id),
+      name: g.name,
+      description: g.description,
+      color: g.color,
+      switchIds: switches.filter((x) => devGroupOf.get(x.mac)?.id === g.id).map((x) => x.id),
+      apIds: aps.filter((x) => devGroupOf.get(x.mac)?.id === g.id).map((x) => x.id),
+    }))
+    .filter((g) => g.switchIds.length + g.apIds.length > 0);
+  const ungroupedSwitches = settings.showUngroupedDevices ? switches.filter((x) => !devGroupOf.has(x.mac)).map((x) => x.id) : [];
+  const ungroupedAps = settings.showUngroupedDevices ? aps.filter((x) => !devGroupOf.has(x.mac)).map((x) => x.id) : [];
+  const shownDevices = new Set([...deviceGroups.flatMap((g) => [...g.switchIds, ...g.apIds]), ...ungroupedSwitches, ...ungroupedAps]);
+  const visibleSwitches = switches.filter((x) => shownDevices.has(x.id));
+  const visibleAps = aps.filter((x) => shownDevices.has(x.id));
 
   // --- WAN & Gateway ------------------------------------------------------------
   const wanH = data.health.find((h) => h.subsystem === 'wan');
@@ -315,8 +340,11 @@ export async function buildDashboard(site: string, isAdmin: boolean): Promise<Da
     groups: groupViews,
     networks,
     ungrouped,
-    switches,
-    aps,
+    switches: visibleSwitches,
+    aps: visibleAps,
+    deviceGroups,
+    ungroupedSwitches,
+    ungroupedAps,
   };
 }
 
@@ -342,4 +370,27 @@ export async function buildAdminNetworks(site: string): Promise<{ networks: Admi
     groupId: groupOf.get(n._id) ?? null,
   }));
   return { networks, error: st.error };
+}
+
+/** Geräteliste (Switche & APs) für den Admin-Bereich inkl. Gruppenzuordnung. */
+export async function buildAdminDevices(site: string): Promise<{ devices: AdminDevice[]; error: string | null }> {
+  const poller = getPoller();
+  await poller.ensureStarted();
+  const st = poller.getState(site);
+  if (!st.data) await poller.pollSite(site);
+  const groupOf = new Map<string, number>();
+  listDeviceGroups(site).forEach((g) => g.deviceMacs.forEach((m) => groupOf.set(m, g.id)));
+  const devices: AdminDevice[] = (st.data?.devices ?? [])
+    .filter((d) => d.type === 'usw' || d.type === 'uap')
+    .map((d) => ({
+      mac: d.mac.toLowerCase(),
+      name: d.name || d.model || d.mac,
+      model: d.model_name || d.model || '',
+      type: d.type === 'usw' ? ('switch' as const) : ('ap' as const),
+      ip: d.ip ?? null,
+      online: d.state === 1,
+      groupId: groupOf.get(d.mac.toLowerCase()) ?? null,
+    }))
+    .sort((a, b) => a.type.localeCompare(b.type) * -1 || a.name.localeCompare(b.name));
+  return { devices, error: st.error };
 }

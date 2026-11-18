@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import type { AdminNetwork, SiteInfo } from '@/lib/views';
 import { Button, Panel, SectionTitle, Toggle } from '../ui/primitives';
+import { DeviceGroups } from './DeviceGroups';
 import { GroupEditor, type AdminGroup, type GroupDraft } from './GroupEditor';
 
 const EMPTY_DRAFT: GroupDraft = {
@@ -60,6 +61,8 @@ export function AdminPanel() {
   const [networks, setNetworks] = useState<AdminNetwork[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
   const [showUngrouped, setShowUngrouped] = useState(true);
+  const [showUngroupedDevices, setShowUngroupedDevices] = useState(true);
+  const [reloadSignal, setReloadSignal] = useState(0);
   const [controllerError, setControllerError] = useState<string | null>(null);
   const [dbWarning, setDbWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export function AdminPanel() {
     void (async () => {
       const [s, st] = await Promise.all([
         api<{ sites: SiteInfo[] }>('/api/unifi/sites'),
-        api<{ settings: { showUngrouped: boolean }; db?: { persistent: boolean; path: string; error: string | null } }>('/api/admin/settings'),
+        api<{ settings: { showUngrouped: boolean; showUngroupedDevices: boolean }; db?: { persistent: boolean; path: string; error: string | null } }>('/api/admin/settings'),
       ]);
       if (s.data) {
         setSites(s.data.sites);
@@ -79,6 +82,7 @@ export function AdminPanel() {
       }
       if (st.data) {
         setShowUngrouped(st.data.settings.showUngrouped);
+        setShowUngroupedDevices(st.data.settings.showUngroupedDevices);
         if (st.data.db && !st.data.db.persistent) {
           setDbWarning(`Datenbank ${st.data.db.path} ist nicht beschreibbar (${st.data.db.error}). Änderungen gehen beim Neustart verloren.`);
         }
@@ -165,6 +169,12 @@ export function AdminPanel() {
     if (res.error) setError(res.error);
   };
 
+  const updateShowUngroupedDevices = async (v: boolean) => {
+    setShowUngroupedDevices(v);
+    const res = await api('/api/admin/settings', { method: 'PUT', body: JSON.stringify({ showUngroupedDevices: v }) });
+    if (res.error) setError(res.error);
+  };
+
   const dropAdmin = async () => {
     await fetch('/api/auth/admin', { method: 'DELETE' }).catch(() => null);
     window.location.assign('/');
@@ -194,7 +204,14 @@ export function AdminPanel() {
             ))}
           </select>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" onClick={() => void reload()} title="Neu laden">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void reload();
+                setReloadSignal((n) => n + 1);
+              }}
+              title="Neu laden"
+            >
               <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
             </Button>
             <Button variant="secondary" onClick={dropAdmin} title="Admin-Rechte abgeben">
@@ -407,6 +424,16 @@ export function AdminPanel() {
             </table>
           </Panel>
         </section>
+
+        {/* ---------------- Geräte-Gruppen ---------------- */}
+        <DeviceGroups
+          site={site}
+          api={api}
+          showUngrouped={showUngroupedDevices}
+          onShowUngrouped={(v) => void updateShowUngroupedDevices(v)}
+          reloadSignal={reloadSignal}
+          onError={setError}
+        />
       </main>
     </div>
   );

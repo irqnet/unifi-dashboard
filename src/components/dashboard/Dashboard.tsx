@@ -1,13 +1,13 @@
 'use client';
 
-import { AlertTriangle, Layers, Radio, Router } from 'lucide-react';
+import { AlertTriangle, Layers } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatBps } from '@/lib/format';
 import type { DashboardPayload } from '@/lib/views';
 import { SectionTitle } from '../ui/primitives';
 import { DashboardHeader } from './DashboardHeader';
 import { DetailDrawer } from './DetailDrawer';
-import { ApCard, SpeedLegend, SwitchCard } from './HardwareCards';
+import { HardwareSection } from './HardwareSection';
 import { NetworkSection, type DetailTarget } from './NetworkCards';
 import { TrafficChart } from './TrafficChart';
 
@@ -169,31 +169,7 @@ export function Dashboard({ defaultRefreshMs }: { defaultRefreshMs: number }) {
               />
             </section>
 
-            {data.switches.length > 0 && (
-              <section>
-                <SectionTitle icon={<Router className="h-4 w-4" />} right={<SpeedLegend />}>
-                  Switche ({data.switches.filter((s) => s.online).length}/{data.switches.length} online)
-                </SectionTitle>
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {data.switches.map((sw) => (
-                    <SwitchCard key={sw.id} sw={sw} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {data.aps.length > 0 && (
-              <section>
-                <SectionTitle icon={<Radio className="h-4 w-4" />}>
-                  Access Points ({data.aps.filter((a) => a.online).length}/{data.aps.length} online)
-                </SectionTitle>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {data.aps.map((ap) => (
-                    <ApCard key={ap.id} ap={ap} />
-                  ))}
-                </div>
-              </section>
-            )}
+            <HardwareSection data={data} />
           </>
         )}
       </main>

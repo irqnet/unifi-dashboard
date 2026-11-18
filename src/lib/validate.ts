@@ -1,4 +1,4 @@
-import type { DisplayMode, GroupInput } from './db';
+import type { DeviceGroupInput, DisplayMode, GroupInput } from './db';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -44,4 +44,34 @@ export async function readJson(req: Request): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+const MAC = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i;
+
+/** Validiert Eingaben für Geräte-Gruppen (Switche & Access Points). */
+export function parseDeviceGroupInput(body: unknown, partial = false): { value: Partial<DeviceGroupInput> } | { error: string } {
+  if (!body || typeof body !== 'object') return { error: 'Ungültige Anfrage' };
+  const b = body as Record<string, unknown>;
+  const out: Partial<DeviceGroupInput> = {};
+  if (b.name !== undefined || !partial) {
+    if (typeof b.name !== 'string' || !b.name.trim()) return { error: 'Name ist erforderlich' };
+    if (b.name.length > 80) return { error: 'Name ist zu lang (max. 80 Zeichen)' };
+    out.name = b.name.trim();
+  }
+  if (b.description !== undefined) {
+    if (typeof b.description !== 'string' || b.description.length > 300) return { error: 'Ungültige Beschreibung' };
+    out.description = b.description.trim();
+  }
+  if (b.color !== undefined) {
+    if (typeof b.color !== 'string' || !HEX.test(b.color)) return { error: 'Ungültige Farbe' };
+    out.color = b.color;
+  }
+  if (b.hidden !== undefined) out.hidden = !!b.hidden;
+  if (b.deviceMacs !== undefined) {
+    if (!Array.isArray(b.deviceMacs) || b.deviceMacs.some((x) => typeof x !== 'string' || !MAC.test(x))) {
+      return { error: 'Ungültige Geräteliste' };
+    }
+    out.deviceMacs = b.deviceMacs as string[];
+  }
+  return { value: out };
 }
