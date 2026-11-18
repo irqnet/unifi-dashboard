@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { Activity, ArrowDown, ArrowUp, LayoutGrid, Server, Cpu, Gauge, Globe, LogOut, MemoryStick, Pause, RefreshCw, Settings2, Ticket, Timer } from 'lucide-react';
+import { Activity, ArrowDown, ArrowUp, LayoutGrid, LogIn, Server, Cpu, Gauge, Globe, LogOut, MemoryStick, Pause, RefreshCw, Settings2, Ticket, Timer } from 'lucide-react';
 import Link from 'next/link';
 import { REFRESH_OPTIONS } from '@/lib/constants';
 import { formatBps, formatMbps, formatTime } from '@/lib/format';
@@ -28,9 +28,12 @@ export function DashboardHeader({
   loading: boolean;
   onReload: () => void;
   onLogout: () => void;
-  view: 'network' | 'hardware';
+  view: 'network' | 'hardware' | 'status';
 }) {
-  const tabs = [
+  const sp = data?.statusPage;
+  const isStatus = view === 'status';
+  const showWan = !isStatus || !!sp?.showWan;
+  const tabs = isStatus ? [] : [
     { key: 'network', href: '/', label: 'Netzwerke', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
     { key: 'hardware', href: '/hardware', label: 'Hardware', icon: <Server className="h-3.5 w-3.5" /> },
     // Gäste-WLAN-Voucher nur für Admins sichtbar
@@ -44,7 +47,25 @@ export function DashboardHeader({
             <Activity className="h-4 w-4 text-sky-400" />
           </div>
           <div>
-            <div className="text-sm font-semibold leading-tight text-noc-text">UniFi Network Status</div>
+            <div className="text-sm font-semibold leading-tight text-noc-text">{isStatus ? sp?.title ?? 'Statusseite' : 'UniFi Network Status'}</div>
+            {isStatus ? (
+              sp && sp.pages.length > 1 ? (
+                <select
+                  aria-label="Statusseite"
+                  value={sp.slug}
+                  onChange={(e) => window.location.assign(`/s/${e.target.value}`)}
+                  className="mt-0.5 !border-0 !bg-transparent !p-0 !pr-6 text-xs text-noc-muted !ring-0 hover:text-noc-text"
+                >
+                  {sp.pages.map((p) => (
+                    <option key={p.slug} value={p.slug} className="bg-noc-panel">
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="mt-0.5 text-xs text-noc-muted">Statusseite</div>
+              )
+            ) : (
             <select
               aria-label="Standort"
               value={site}
@@ -57,10 +78,12 @@ export function DashboardHeader({
                 </option>
               ))}
             </select>
+            )}
           </div>
           {data && <StatusBadge status={data.status} />}
         </div>
 
+        {tabs.length > 0 && (
         <nav className="flex overflow-hidden rounded-lg border border-noc-line" aria-label="Ansicht">
           {tabs.map((t) => (
             <Link
@@ -77,8 +100,9 @@ export function DashboardHeader({
             </Link>
           ))}
         </nav>
+        )}
 
-        {data && (
+        {data && showWan && (
           <div className="flex flex-1 flex-wrap items-center gap-x-6 gap-y-2 text-xs">
             <HeaderStat icon={<Globe className="h-3.5 w-3.5" />} label="WAN-IP" value={data.wan.ip ?? '–'} sub={data.wan.isp ?? undefined} />
             <HeaderStat icon={<Timer className="h-3.5 w-3.5" />} label="Latenz" value={data.wan.latency !== null ? `${data.wan.latency} ms` : '–'} />
@@ -134,17 +158,25 @@ export function DashboardHeader({
           <button type="button" onClick={onReload} className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-noc-text" aria-label="Jetzt aktualisieren">
             <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
           </button>
-          <Link
-            href="/admin"
-            className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-noc-text"
-            aria-label="Admin-Bereich"
-            title="Admin-Bereich"
-          >
-            <Settings2 className="h-4 w-4" />
-          </Link>
-          <button type="button" onClick={onLogout} className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-rose-300" aria-label="Abmelden" title="Abmelden">
-            <LogOut className="h-4 w-4" />
-          </button>
+          {!isStatus && (
+            <Link
+              href="/admin"
+              className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-noc-text"
+              aria-label="Admin-Bereich"
+              title="Admin-Bereich"
+            >
+              <Settings2 className="h-4 w-4" />
+            </Link>
+          )}
+          {isStatus && sp && !sp.loggedIn ? (
+            <Link href="/gate" className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-noc-text" aria-label="Anmelden" title="Anmelden">
+              <LogIn className="h-4 w-4" />
+            </Link>
+          ) : (
+            <button type="button" onClick={onLogout} className="rounded-lg border border-noc-line p-1.5 text-noc-muted hover:text-rose-300" aria-label="Abmelden" title="Abmelden">
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </header>

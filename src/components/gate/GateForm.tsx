@@ -1,25 +1,33 @@
 'use client';
 
-import { KeyRound, Loader2, ShieldCheck } from 'lucide-react';
+import { KeyRound, Loader2, ShieldCheck, User } from 'lucide-react';
 import { useState } from 'react';
 import { Turnstile } from './Turnstile';
 
 export function GateForm({
+  sharedAccess,
   requirePassword,
   turnstileSiteKey,
   next,
 }: {
+  /** Anmeldung ohne Benutzerkonto (gemeinsamer Zugang) erlaubt */
+  sharedAccess: boolean;
+  /** ACCESS_PASSWORD für den gemeinsamen Zugang gesetzt */
   requirePassword: boolean;
   turnstileSiteKey: string | null;
   next: string;
 }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reset, setReset] = useState(0);
 
-  const canSubmit = (!requirePassword || password.length > 0) && (!turnstileSiteKey || !!token) && !busy;
+  const withUser = username.trim().length > 0;
+  const credentialsOk = withUser ? password.length > 0 : sharedAccess && (!requirePassword || password.length > 0);
+  const showPassword = withUser || requirePassword || !sharedAccess;
+  const canSubmit = credentialsOk && (!turnstileSiteKey || !!token) && !busy;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,7 +38,7 @@ export function GateForm({
       const res = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, token }),
+        body: JSON.stringify({ username: username.trim(), password, token }),
       });
       if (res.ok) {
         // Bei Rewrite durch die Middleware steht die ursprünglich angefragte URL in der Adresszeile
@@ -51,16 +59,32 @@ export function GateForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      {requirePassword && (
+      <div>
+        <label htmlFor="username" className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-noc-muted">
+          <User className="h-3.5 w-3.5" /> Benutzername
+        </label>
+        <input
+          id="username"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          autoFocus
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          className="w-full"
+          placeholder={sharedAccess ? 'leer lassen für gemeinsamen Zugang' : ''}
+        />
+      </div>
+      {showPassword && (
         <div>
           <label htmlFor="password" className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-noc-muted">
-            <KeyRound className="h-3.5 w-3.5" /> Zugangspasswort
+            <KeyRound className="h-3.5 w-3.5" /> {withUser || !sharedAccess ? 'Passwort' : 'Zugangspasswort'}
           </label>
           <input
             id="password"
             type="password"
             autoComplete="current-password"
-            autoFocus
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full"

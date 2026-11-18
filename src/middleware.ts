@@ -2,12 +2,15 @@
  * Zwei-Stufen-Zugriffsschutz:
  *  - "/" und "/api/unifi/*"         → Rolle viewer oder admin (sonst Gate-Seite bzw. 401)
  *  - "/admin", "/vouchers" und "/api/admin/*" → ausschließlich Rolle admin (sonst Admin-Login bzw. 401/403)
+ *  - Benutzerkonten (Rolle user) sehen nur ihre Statusseiten; "/" zeigt deren Übersicht (/start)
  *  - öffentlich: /gate, /api/auth/verify, /api/health, statische Assets
+ *  - Statusseiten /s/<slug> und /api/status/<slug> prüfen den Zugriff selbst (öffentliche Seiten,
+ *    Zuweisung an Benutzer) – dafür ist ein DB-Zugriff nötig, der in der Middleware nicht möglich ist
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 
-const PUBLIC_PATHS = ['/gate', '/api/auth/verify', '/api/health'];
+const PUBLIC_PATHS = ['/gate', '/api/auth/verify', '/api/health', '/s', '/api/status'];
 
 /**
  * Statt HTTP-Redirects wird intern auf die Login-Seite umgeschrieben (Rewrite). Hintergrund:
@@ -44,6 +47,13 @@ export async function middleware(req: NextRequest) {
   // Admin-Login-Seite und Upgrade-Endpunkt: gültige Viewer-Session genügt
   if (pathname === '/admin/login' || pathname === '/api/auth/admin' || pathname === '/api/auth/logout') {
     return NextResponse.next();
+  }
+
+  // Benutzerkonten ohne Admin-Rolle: nur Statusseiten, Admin-Login und Abmelden
+  if (session.role === 'user') {
+    if (pathname === '/start') return NextResponse.next();
+    if (isApi) return NextResponse.json({ error: 'Kein Zugriff' }, { status: 403 });
+    return showPage(req, '/start');
   }
 
   const adminOnly =
