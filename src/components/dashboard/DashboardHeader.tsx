@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { Activity, ArrowDown, ArrowUp, LayoutGrid, Server, Cpu, Gauge, Globe, LogOut, MemoryStick, Pause, RefreshCw, Settings2, Timer } from 'lucide-react';
+import { Activity, ArrowDown, ArrowUp, LayoutGrid, Server, Cpu, Gauge, Globe, LogOut, MemoryStick, Pause, RefreshCw, Settings2, Ticket, Timer } from 'lucide-react';
 import Link from 'next/link';
 import { REFRESH_OPTIONS } from '@/lib/constants';
 import { formatBps, formatMbps, formatTime } from '@/lib/format';
@@ -33,7 +33,9 @@ export function DashboardHeader({
   const tabs = [
     { key: 'network', href: '/', label: 'Netzwerke', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
     { key: 'hardware', href: '/hardware', label: 'Hardware', icon: <Server className="h-3.5 w-3.5" /> },
-  ] as const;
+    // Gäste-WLAN-Voucher nur für Admins sichtbar
+    ...(data?.isAdmin ? [{ key: 'vouchers', href: '/vouchers', label: 'Voucher', icon: <Ticket className="h-3.5 w-3.5" /> }] : []),
+  ];
   return (
     <header className="sticky top-0 z-40 border-b border-noc-line bg-noc-bg/85 backdrop-blur">
       <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 lg:px-6">

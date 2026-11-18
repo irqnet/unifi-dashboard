@@ -33,3 +33,22 @@ select,
 textarea {
   @apply rounded-lg border border-noc-line bg-noc-bg px-3 py-2 text-sm text-noc-text placeholder:text-noc-muted/60 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500;
 }
+
+/* --- Voucher-Druckansicht ---------------------------------------------- */
+html:has(.voucher-print),
+html:has(.voucher-print) body {
+  background: #e5e7eb;
+  background-image: none;
+  color: #0f172a;
+  color-scheme: light;
+}
+
+@media print {
+  html:has(.voucher-print),
+  html:has(.voucher-print) body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

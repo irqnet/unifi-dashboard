@@ -150,3 +150,42 @@ export interface SiteRawData {
   networks: RawNetwork[];
   health: RawHealth[];
 }
+
+/** Hotspot-Voucher aus stat/voucher (klassische Network-API). */
+export interface RawVoucher {
+  _id: string;
+  code: string;
+  create_time: number;
+  /** Gültigkeit in Minuten ab erster Nutzung */
+  duration: number;
+  /** 0 = unbegrenzt viele Nutzungen, 1 = einmalig, n = n Geräte */
+  quota: number;
+  used?: number;
+  note?: string | null;
+  status?: string;
+  status_expires?: number;
+  start_time?: number;
+  end_time?: number;
+  qos_overwrite?: boolean;
+  qos_rate_max_up?: number;
+  qos_rate_max_down?: number;
+  qos_usage_quota?: number;
+  admin_name?: string;
+  for_hotspot?: boolean;
+}
+
+/** Gast-Sitzung aus stat/guest (für die Zuordnung Voucher → Geräte). */
+export interface RawGuest {
+  _id?: string;
+  mac: string;
+  hostname?: string;
+  name?: string;
+  voucher_code?: string;
+  voucher_id?: string;
+  start?: number;
+  end?: number;
+  expired?: boolean;
+  authorized_by?: string;
+  rx_bytes?: number;
+  tx_bytes?: number;
+}
