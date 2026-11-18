@@ -1,0 +1,46 @@
+# Podman-Compose: lokaler Build & Betrieb (kein Registry-Pull)
+#   podman-compose up -d --build     bzw.   podman compose up -d --build
+name: unifi-dashboard
+
+services:
+  unifi-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost/unifi-dashboard:latest
+    container_name: unifi-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      DATA_DIR: /app/data
+    ports:
+      # extern 3004 → intern 3000
+      - "3004:3000"
+    volumes:
+      # :Z = privates SELinux-Label, damit der Container schreiben darf
+      - ./data:/app/data:Z
+    # Rootless Podman: Host-User auf UID/GID 1000 (node) im Container abbilden,
+    # damit ./data ohne chown beschreibbar ist (Podman >= 4.3)
+    userns_mode: "keep-id:uid=1000,gid=1000"
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000,mode=0755
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Beispiel: Controller per Hostname erreichbar machen (UNIFI_CONTROLLER_URL=https://unifi.local)
+    extra_hosts:
+      - "unifi.local:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

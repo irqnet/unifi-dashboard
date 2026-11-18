@@ -1,0 +1,41 @@
+# Abhängigkeiten
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Build
+build/
+dist/
+
+# Umgebungsvariablen / Secrets
+.env
+.env.*
+!.env.example
+
+# SQLite-Datenbank (persistentes Volume)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Tests / Coverage
+coverage/
