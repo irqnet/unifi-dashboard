@@ -19,7 +19,7 @@ export function PageHeader({ title, lead, action }: { title: string; lead?: Reac
   return (
     <div className="mb-7">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-[26px] font-bold tracking-tight text-white">{title}</h1>
+        <h1 className="text-[26px] font-bold tracking-tight text-noc-strong">{title}</h1>
         {action}
       </div>
       {lead && <p className="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-noc-muted">{lead}</p>}
@@ -77,7 +77,7 @@ export function Group({
           {aside && <div className="text-[13px] text-noc-muted">{aside}</div>}
         </div>
       )}
-      <div className="overflow-hidden rounded-xl bg-[#141a23] ring-1 ring-inset ring-white/[0.04] [&>*+*]:border-t [&>*+*]:border-white/[0.06]">
+      <div className="overflow-hidden rounded-xl bg-noc-group ring-1 ring-inset ring-fg/[0.04] [&>*+*]:border-t [&>*+*]:border-fg/[0.06]">
         {children}
       </div>
       {footer && <p className="mt-1.5 px-3.5 text-xs leading-relaxed text-noc-muted">{footer}</p>}
@@ -115,12 +115,12 @@ export function Row({
       </div>
       {detail && <div className="flex min-w-0 shrink-0 items-center gap-2 text-[13px] text-noc-muted">{detail}</div>}
       {children}
-      {(chevron ?? !!onClick) && <ChevronRight className="h-4 w-4 shrink-0 text-[#5c6878]" />}
+      {(chevron ?? !!onClick) && <ChevronRight className="h-4 w-4 shrink-0 text-noc-faint" />}
     </>
   );
   const cls = clsx('flex min-h-[52px] w-full items-center gap-3 px-3.5 py-2.5 text-left', className);
   return onClick ? (
-    <button type="button" onClick={onClick} className={clsx(cls, 'transition-colors hover:bg-white/[0.03] focus:outline-none focus-visible:bg-white/[0.05]')}>
+    <button type="button" onClick={onClick} className={clsx(cls, 'transition-colors hover:bg-fg/[0.03] focus:outline-none focus-visible:bg-fg/[0.05]')}>
       {body}
     </button>
   ) : (
@@ -177,8 +177,8 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(
-        'relative h-[23px] w-[38px] shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141a23] disabled:cursor-not-allowed disabled:opacity-40',
-        checked ? 'bg-[#30d158]' : 'bg-[#2a3442]',
+        'relative h-[23px] w-[38px] shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-noc-group disabled:cursor-not-allowed disabled:opacity-40',
+        checked ? 'bg-[#30d158]' : 'bg-noc-off',
       )}
     >
       <span
@@ -204,7 +204,7 @@ export function Pill({ tone = 'neutral', children, icon }: { tone?: 'neutral' | 
     <span
       className={clsx(
         'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-[11.5px] font-medium',
-        tone === 'neutral' && 'bg-white/[0.06] text-noc-muted',
+        tone === 'neutral' && 'bg-fg/[0.06] text-noc-muted',
         tone === 'warn' && 'bg-amber-400/[0.12] text-amber-300',
         tone === 'ok' && 'bg-emerald-400/[0.12] text-emerald-300',
         tone === 'danger' && 'bg-rose-400/[0.12] text-rose-300',
@@ -260,7 +260,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
           type="button"
           onClick={() => onChange(c)}
           className={clsx(
-            'h-[22px] w-[22px] rounded-full ring-offset-2 ring-offset-[#141a23] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
+            'h-[22px] w-[22px] rounded-full ring-offset-2 ring-offset-noc-group focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
             value.toLowerCase() === c && 'ring-2 ring-white',
           )}
           style={{ background: c }}
@@ -270,7 +270,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
       ))}
       <label
         className={clsx(
-          'relative h-[22px] w-[22px] cursor-pointer overflow-hidden rounded-full ring-offset-2 ring-offset-[#141a23]',
+          'relative h-[22px] w-[22px] cursor-pointer overflow-hidden rounded-full ring-offset-2 ring-offset-noc-group',
           !PRESET_COLORS.includes(value.toLowerCase()) && 'ring-2 ring-white',
         )}
         style={{ background: 'conic-gradient(#f87171,#fbbf24,#34d399,#38bdf8,#a78bfa,#f472b6,#f87171)' }}
@@ -284,7 +284,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
 
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
-    <div className="inline-flex rounded-lg bg-white/[0.06] p-0.5" role="radiogroup">
+    <div className="inline-flex rounded-lg bg-fg/[0.06] p-0.5" role="radiogroup">
       {options.map(([v, label]) => (
         <button
           key={v}
@@ -294,7 +294,7 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
           onClick={() => onChange(v)}
           className={clsx(
             'rounded-md px-3 py-1 text-[12.5px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
-            value === v ? 'bg-[#2c3746] text-white shadow-sm' : 'text-noc-muted hover:text-noc-text',
+            value === v ? 'bg-noc-seg text-noc-strong shadow-sm' : 'text-noc-muted hover:text-noc-text',
           )}
         >
           {label}
@@ -326,12 +326,12 @@ export function CheckRow({
       role="checkbox"
       aria-checked={checked}
       onClick={onToggle}
-      className="flex min-h-[44px] w-full items-center gap-3 px-3.5 py-2 text-left transition-colors hover:bg-white/[0.03] focus:outline-none focus-visible:bg-white/[0.05]"
+      className="flex min-h-[44px] w-full items-center gap-3 px-3.5 py-2 text-left transition-colors hover:bg-fg/[0.03] focus:outline-none focus-visible:bg-fg/[0.05]"
     >
       <span
         className={clsx(
           'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors',
-          checked ? 'border-sky-500 bg-sky-500 text-slate-950' : 'border-[#4b5666]',
+          checked ? 'border-sky-500 bg-sky-500 text-slate-950' : 'border-noc-radio',
         )}
       >
         {checked && <Check className="h-3 w-3" strokeWidth={3} />}
@@ -390,7 +390,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-[#0c1016] shadow-[0_30px_80px_rgba(0,0,0,.6)] ring-1 ring-white/[0.07] sm:max-w-[560px] sm:rounded-2xl"
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-noc-sheet shadow-[0_30px_80px_rgba(0,0,0,.6)] ring-1 ring-fg/[0.07] sm:max-w-[560px] sm:rounded-2xl"
       >
         <form
           className="flex min-h-0 flex-1 flex-col"
@@ -399,11 +399,11 @@ export function Sheet({
             if (!busy) onSubmit();
           }}
         >
-          <header className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-white/[0.07] px-4 py-3">
+          <header className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-fg/[0.07] px-4 py-3">
             <LinkButton onClick={onCancel} className="justify-self-start text-[15px]">
               Abbrechen
             </LinkButton>
-            <h2 id={titleId} className="text-[15px] font-semibold text-white">
+            <h2 id={titleId} className="text-[15px] font-semibold text-noc-strong">
               {title}
             </h2>
             <button type="submit" disabled={busy} className="justify-self-end text-[15px] font-semibold text-sky-400 hover:text-sky-300 disabled:opacity-50">
@@ -448,7 +448,7 @@ export function DeleteRow({
         <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
           <span className="text-sm text-noc-text">Wirklich löschen?</span>
           <div className="flex gap-2">
-            <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-[13px] text-noc-muted hover:bg-white/[0.05] hover:text-noc-text">
+            <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-[13px] text-noc-muted hover:bg-fg/[0.05] hover:text-noc-text">
               Abbrechen
             </button>
             <button type="button" onClick={onConfirm} className="rounded-lg bg-rose-500 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-rose-400">
@@ -461,7 +461,7 @@ export function DeleteRow({
           type="button"
           onClick={onAsk}
           disabled={disabled}
-          className="w-full px-3.5 py-3 text-center text-sm font-medium text-rose-400 hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full px-3.5 py-3 text-center text-sm font-medium text-rose-400 hover:bg-fg/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {label}
         </button>

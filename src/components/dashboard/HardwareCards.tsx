@@ -31,7 +31,7 @@ export function SwitchCard({ sw }: { sw: SwitchView }) {
   return (
     <div className={clsx('rounded-xl border bg-noc-panel p-4', sw.online ? 'border-noc-line' : 'border-rose-500/40')}>
       <DeviceHeader icon={<Router className="h-4 w-4 text-sky-400" />} name={sw.name} model={sw.model} ip={sw.ip} version={sw.version} online={sw.online} />
-      <div className="mb-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 text-xs @md:grid-cols-4">
         <div>
           <div className="flex items-center gap-1 text-noc-muted">
             <Clock className="h-3 w-3" /> Uptime

@@ -10,7 +10,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 
-const PUBLIC_PATHS = ['/gate', '/api/auth/verify', '/api/health', '/s', '/api/status'];
+// /api/layout prüft den Zugriff selbst (Layouts auch für Statusseiten-Benutzer)
+const PUBLIC_PATHS = ['/gate', '/api/auth/verify', '/api/health', '/s', '/api/status', '/api/layout'];
 
 /**
  * Statt HTTP-Redirects wird intern auf die Login-Seite umgeschrieben (Rewrite). Hintergrund:
