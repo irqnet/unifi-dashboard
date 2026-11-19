@@ -3,6 +3,7 @@
 import clsx from 'clsx';
 import { ChevronDown, ChevronLeft, Cog, Layers, LayoutGrid, LogOut, RefreshCw, Server, ShieldOff, Ticket, Users, X } from 'lucide-react';
 import Link from 'next/link';
+import { ThemeSwitcher } from '../ui/theme';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { SiteInfo } from '@/lib/views';
 import { VoucherManager } from '../vouchers/VoucherManager';
@@ -191,7 +192,7 @@ export function AdminPanel() {
       <select
         value={site}
         onChange={(e) => changeSite(e.target.value)}
-        className="w-full appearance-none !rounded-lg !border-white/[0.07] !bg-[#141a23] !py-1.5 !pl-3 !pr-8 text-[13px]"
+        className="w-full appearance-none !rounded-lg !border-fg/[0.07] !bg-noc-group !py-1.5 !pl-3 !pr-8 text-[13px]"
         disabled={sites.length < 2}
       >
         {(sites.length ? sites : [{ name: site, desc: siteDesc || '…' }]).map((s) => (
@@ -209,7 +210,7 @@ export function AdminPanel() {
       {/* ---------------- Seitenleiste ---------------- */}
       <aside
         className={clsx(
-          'flex-col gap-4 bg-[#0e131a] px-3 pb-4 pt-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:overflow-y-auto lg:border-r lg:border-white/[0.06] lg:px-2.5',
+          'flex-col gap-4 bg-noc-sidebar px-3 pb-4 pt-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:overflow-y-auto lg:border-r lg:border-fg/[0.06] lg:px-2.5',
           view === null ? 'flex min-h-screen' : 'hidden',
         )}
         aria-label="Admin-Navigation"
@@ -219,7 +220,7 @@ export function AdminPanel() {
             <Cog className="h-4 w-4" strokeWidth={2.4} />
           </span>
           <div className="leading-tight">
-            <div className="text-[14px] font-semibold text-white">Verwaltung</div>
+            <div className="text-[14px] font-semibold text-noc-strong">Verwaltung</div>
             <div className="text-[11.5px] text-noc-muted">UniFi Dashboard</div>
           </div>
         </div>
@@ -230,7 +231,7 @@ export function AdminPanel() {
           {NAV.map((grp) => (
             <div key={grp.title}>
               <div className="px-2.5 pb-1 text-[11px] font-semibold text-noc-muted">{grp.title}</div>
-              <ul className="flex flex-col gap-px max-lg:gap-0 max-lg:divide-y max-lg:divide-white/[0.06] max-lg:overflow-hidden max-lg:rounded-xl max-lg:bg-[#141a23]">
+              <ul className="flex flex-col gap-px max-lg:gap-0 max-lg:divide-y max-lg:divide-fg/[0.06] max-lg:overflow-hidden max-lg:rounded-xl max-lg:bg-noc-group">
                 {grp.items.map((it) => (
                   <li key={it.view}>
                     <button
@@ -239,13 +240,13 @@ export function AdminPanel() {
                       aria-current={active === it.view && view !== null ? 'page' : undefined}
                       className={clsx(
                         'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 max-lg:min-h-[46px] max-lg:rounded-none max-lg:text-[15px]',
-                        active === it.view ? 'lg:bg-sky-400/[0.16] lg:text-white' : 'text-[#cfd7e3] lg:hover:bg-white/[0.04]',
+                        active === it.view ? 'lg:bg-sky-400/[0.16] lg:text-noc-strong' : 'text-noc-soft lg:hover:bg-fg/[0.04]',
                       )}
                     >
                       <NavIcon color={it.color}>{it.icon}</NavIcon>
                       <span className="flex-1">{it.label}</span>
                       {counts[it.view] !== undefined && <span className="text-[12px] tabular-nums text-noc-muted">{counts[it.view]}</span>}
-                      <ChevronLeft className="h-4 w-4 rotate-180 text-[#5c6878] lg:hidden" />
+                      <ChevronLeft className="h-4 w-4 rotate-180 text-noc-faint lg:hidden" />
                     </button>
                   </li>
                 ))}
@@ -254,11 +255,15 @@ export function AdminPanel() {
           ))}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-px border-t border-white/[0.06] pt-3">
-          <Link href="/" className="flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13.5px] text-[#cfd7e3] hover:bg-white/[0.04]">
+        <div className="mt-auto flex flex-col gap-px border-t border-fg/[0.06] pt-3">
+          <div className="px-1.5 pb-2">
+            <div className="px-1 pb-1.5 text-[11px] font-semibold text-noc-muted">Darstellung</div>
+            <ThemeSwitcher labels className="flex w-full" />
+          </div>
+          <Link href="/" className="flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13.5px] text-noc-soft hover:bg-fg/[0.04]">
             <ChevronLeft className="h-4 w-4" /> Zum Dashboard
           </Link>
-          <button type="button" onClick={() => void dropAdmin()} className="flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] text-noc-muted hover:bg-white/[0.04] hover:text-noc-text">
+          <button type="button" onClick={() => void dropAdmin()} className="flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-left text-[13.5px] text-noc-muted hover:bg-fg/[0.04] hover:text-noc-text">
             <ShieldOff className="h-4 w-4" /> Admin beenden
           </button>
         </div>
@@ -267,7 +272,7 @@ export function AdminPanel() {
       {/* ---------------- Inhalt ---------------- */}
       <div className={clsx('min-w-0', view === null && 'hidden lg:block')}>
         {/* Mobile Kopfzeile mit Zurück */}
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-noc-bg/85 px-3 py-2.5 backdrop-blur lg:hidden">
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-fg/[0.06] bg-noc-bg/85 px-3 py-2.5 backdrop-blur lg:hidden">
           <button type="button" onClick={() => go(null)} className="flex items-center gap-0.5 text-[15px] text-sky-400">
             <ChevronLeft className="h-5 w-5" /> Verwaltung
           </button>

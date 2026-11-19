@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Gauge, Globe, Timer, Users } from 'lucide-react';
-import { formatBps, formatMbps } from '@/lib/format';
+import { ArrowDown, ArrowUp, Globe } from 'lucide-react';
+import { formatBps } from '@/lib/format';
 import type { DashboardPayload } from '@/lib/views';
 import { TrafficChart } from './TrafficChart';
 
@@ -34,10 +34,10 @@ function BandwidthGauge({
   const r = 70;
   const c = Math.PI * r;
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative h-[96px] w-[180px]">
+    <div className="flex min-w-0 flex-col items-center">
+      <div className="relative aspect-[180/96] w-[132px] @md:w-[180px]">
         <svg viewBox="0 0 180 96" className="h-full w-full" aria-hidden>
-          <path d="M 20 88 A 70 70 0 0 1 160 88" fill="none" stroke="#222b38" strokeWidth="14" strokeLinecap="round" />
+          <path d="M 20 88 A 70 70 0 0 1 160 88" fill="none" stroke="rgb(var(--c-track))" strokeWidth="14" strokeLinecap="round" />
           <path
             d="M 20 88 A 70 70 0 0 1 160 88"
             fill="none"
@@ -48,16 +48,18 @@ function BandwidthGauge({
             style={{ transition: 'stroke-dasharray 0.6s ease, stroke 0.3s' }}
           />
         </svg>
-        <div className="absolute inset-x-0 bottom-0 text-center font-mono text-xl font-semibold leading-none tabular-nums" style={{ color: utilColor(pct) ?? '#d7dee9' }}>
+        <div className="absolute inset-x-0 bottom-0 text-center font-mono text-base font-semibold leading-none tabular-nums @md:text-xl" style={{ color: utilColor(pct) ?? 'rgb(var(--noc-text))' }}>
           {capacity ? `${pct.toFixed(pct < 10 ? 1 : 0)} %` : '–'}
         </div>
       </div>
-      <div className="mt-3 font-mono text-2xl font-semibold leading-none tabular-nums" style={{ color }}>
+      <div className="mt-2 whitespace-nowrap font-mono text-lg font-semibold leading-none tabular-nums @md:mt-3 @md:text-2xl" style={{ color }}>
         {formatBps(value)}
       </div>
-      <div className="mt-1.5 flex items-center gap-1.5 text-xs uppercase tracking-wider text-noc-muted">
-        {icon}
-        {label}
+      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-1.5 text-[11px] uppercase tracking-wider text-noc-muted @md:text-xs">
+        <span className="flex items-center gap-1">
+          {icon}
+          {label}
+        </span>
         <span className="normal-case tracking-normal">{capacity ? `von ${formatBps(capacity, 0)}` : '· Kapazität unbekannt'}</span>
       </div>
     </div>
@@ -74,7 +76,7 @@ function MiniStat({ label, value, className }: { label: string; value: string; c
 }
 
 export function WanPanel({ data }: { data: DashboardPayload }) {
-  const { wan, totals } = data;
+  const { wan } = data;
   const h = wan.history;
   const peakDown = h.reduce((m, p) => Math.max(m, p.down), 0);
   const peakUp = h.reduce((m, p) => Math.max(m, p.up), 0);
@@ -83,35 +85,22 @@ export function WanPanel({ data }: { data: DashboardPayload }) {
   const minutes = h.length > 1 ? Math.round((h[h.length - 1].t - h[0].t) / 60000) : 0;
 
   return (
-    <section className="rounded-xl border border-noc-line bg-noc-panel p-4 lg:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-noc-muted">
-          <Globe className="h-4 w-4" /> WAN-Durchsatz
-          {wan.isp && <span className="font-normal normal-case tracking-normal text-noc-muted">· {wan.isp}</span>}
+    <section className="tile-shadow flex h-full flex-col rounded-xl border border-noc-line bg-noc-panel p-3 @md:p-4 @3xl:p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-noc-text">
+          <Globe className="h-4 w-4 shrink-0 text-noc-muted" /> WAN-Durchsatz
+          {wan.isp && <span className="truncate font-normal text-noc-muted">· {wan.isp}</span>}
         </h2>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-noc-muted">
-          <span className="flex items-center gap-1">
-            <Timer className="h-3.5 w-3.5" /> Latenz <span className="font-mono text-noc-text">{wan.latency !== null ? `${wan.latency} ms` : '–'}</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <Gauge className="h-3.5 w-3.5" /> Speedtest{' '}
-            <span className="font-mono text-noc-text">
-              ↓ {formatMbps(wan.xputDown)} / ↑ {formatMbps(wan.xputUp)}
-            </span>
-          </span>
-          <span className="flex items-center gap-1">
-            <Users className="h-3.5 w-3.5" /> <span className="font-mono text-noc-text">{totals.total}</span> Clients ({totals.wired} LAN / {totals.wireless} WLAN)
-          </span>
-        </div>
+        {wan.activeWan && <span className="hidden text-xs text-noc-muted @md:inline">{wan.activeWan}</span>}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[auto,1fr]">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col xl:flex-row">
-            <BandwidthGauge label="Download" icon={<ArrowDown className="h-3.5 w-3.5" />} value={wan.down} capacity={wan.capacityDown} color="#38bdf8" />
-            <BandwidthGauge label="Upload" icon={<ArrowUp className="h-3.5 w-3.5" />} value={wan.up} capacity={wan.capacityUp} color="#a78bfa" />
+      <div className="grid min-h-0 flex-1 gap-4 @3xl:grid-cols-[auto,1fr] @3xl:gap-6">
+        <div className="flex flex-col items-center justify-center gap-3">
+          <div className="flex w-full items-start justify-around gap-2 @3xl:gap-6">
+            <BandwidthGauge label="Download" icon={<ArrowDown className="h-3.5 w-3.5" />} value={wan.down} capacity={wan.capacityDown} color="rgb(var(--c-down))" />
+            <BandwidthGauge label="Upload" icon={<ArrowUp className="h-3.5 w-3.5" />} value={wan.up} capacity={wan.capacityUp} color="rgb(var(--c-up))" />
           </div>
-          <div className="w-full rounded-lg border border-noc-line bg-noc-bg/60 px-3 py-2 text-center">
+          <div className="hidden w-full rounded-lg border border-noc-line bg-noc-bg/60 px-3 py-2 text-center @md:block">
             <div className="text-[10px] uppercase tracking-wider text-noc-muted">
               Expected ISP Speed{wan.activeWan ? ` · ${wan.activeWan}` : ''}
             </div>
@@ -126,9 +115,11 @@ export function WanPanel({ data }: { data: DashboardPayload }) {
             )}
           </div>
         </div>
-        <div className="min-w-0">
-          <TrafficChart id="wan" data={h} height={230} />
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className="relative min-h-[110px] flex-1 @md:min-h-[170px]">
+            <TrafficChart id="wan" data={h} fill />
+          </div>
+          <div className="mt-3 hidden grid-cols-2 gap-2 @md:grid @2xl:grid-cols-4">
             <MiniStat label="Spitze Download" value={formatBps(peakDown)} className="text-sky-300" />
             <MiniStat label="Ø Download" value={formatBps(avgDown)} className="text-sky-300" />
             <MiniStat label="Spitze Upload" value={formatBps(peakUp)} className="text-violet-300" />
@@ -136,7 +127,7 @@ export function WanPanel({ data }: { data: DashboardPayload }) {
           </div>
         </div>
       </div>
-      <p className="mt-3 text-[11px] text-noc-muted">
+      <p className="mt-3 hidden text-[11px] text-noc-muted @md:block">
         {wan.capacitySource ? `Auslastung bezogen auf ${SOURCE_LABEL[wan.capacitySource]}. ` : ''}
         Spitze und Durchschnitt über die letzten {Math.max(1, minutes)} min.
       </p>

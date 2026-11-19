@@ -4,8 +4,11 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { formatBps, formatBpsShort } from '@/lib/format';
 import type { TrafficPoint } from '@/lib/views';
 
-const DOWN = '#38bdf8';
-const UP = '#a78bfa';
+// CSS-Variablen, damit die Farben dem Hell/Dunkel-Modus folgen
+const DOWN = 'rgb(var(--c-down))';
+const UP = 'rgb(var(--c-up))';
+const GRID = 'rgb(var(--c-grid))';
+const AXIS = 'rgb(var(--c-axis))';
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { dataKey: string; value: number }[]; label?: number }) {
   if (!active || !payload?.length) return null;
@@ -29,22 +32,25 @@ export function TrafficChart({
   height = 120,
   axes = true,
   id,
+  fill = false,
 }: {
   data: TrafficPoint[];
   height?: number;
   axes?: boolean;
   id: string;
+  /** Füllt den (relativ positionierten) Elternbereich statt fester Höhe – für skalierbare Kacheln. */
+  fill?: boolean;
 }) {
   const gid = `g-${id.replace(/[^a-zA-Z0-9-]/g, '')}`;
   if (data.length < 2) {
     return (
-      <div className="flex items-center justify-center text-xs text-noc-muted" style={{ height }}>
+      <div className={fill ? 'absolute inset-0 flex items-center justify-center text-xs text-noc-muted' : 'flex items-center justify-center text-xs text-noc-muted'} style={fill ? undefined : { height }}>
         Sammle Verlaufsdaten …
       </div>
     );
   }
   return (
-    <div style={{ height }} className="w-full">
+    <div style={fill ? undefined : { height }} className={fill ? 'absolute inset-0' : 'w-full'}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: axes ? 0 : 4 }}>
           <defs>
@@ -57,21 +63,21 @@ export function TrafficChart({
               <stop offset="100%" stopColor={UP} stopOpacity={0} />
             </linearGradient>
           </defs>
-          {axes && <CartesianGrid stroke="#222b38" strokeDasharray="3 3" vertical={false} />}
+          {axes && <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />}
           <XAxis
             dataKey="t"
             type="number"
             domain={['dataMin', 'dataMax']}
             hide={!axes}
             tickFormatter={(t: number) => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-            stroke="#7d8ba1"
+            stroke={AXIS}
             fontSize={10}
             tickLine={false}
             axisLine={false}
             minTickGap={40}
           />
-          <YAxis hide={!axes} tickFormatter={formatBpsShort} stroke="#7d8ba1" fontSize={10} tickLine={false} axisLine={false} width={46} />
-          <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#334155' }} />
+          <YAxis hide={!axes} tickFormatter={formatBpsShort} stroke={AXIS} fontSize={10} tickLine={false} axisLine={false} width={46} />
+          <Tooltip content={<ChartTooltip />} cursor={{ stroke: AXIS, strokeOpacity: 0.5 }} />
           <Area type="monotone" dataKey="down" stroke={DOWN} strokeWidth={1.5} fill={`url(#${gid}-d)`} isAnimationActive={false} />
           <Area type="monotone" dataKey="up" stroke={UP} strokeWidth={1.5} fill={`url(#${gid}-u)`} isAnimationActive={false} />
         </AreaChart>

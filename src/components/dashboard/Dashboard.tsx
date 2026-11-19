@@ -1,13 +1,17 @@
 'use client';
 
-import { AlertTriangle, Layers } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveOrder, type TileLayout } from '@/lib/layout';
 import type { DashboardPayload } from '@/lib/views';
-import { SectionTitle } from '../ui/primitives';
 import { DashboardHeader } from './DashboardHeader';
 import { DetailDrawer } from './DetailDrawer';
-import { HardwareSection } from './HardwareSection';
-import { NetworkSection, type DetailTarget } from './NetworkCards';
+import { EditBar } from './EditBar';
+import { HardwareEmpty, hardwareTiles, hasHardware } from './HardwareSection';
+import { kpiTiles } from './KpiTiles';
+import { networkTiles, type DetailTarget } from './NetworkCards';
+import { TileGrid, type TileDef } from './TileGrid';
+import { useTileLayout } from './useTileLayout';
 import { WanPanel } from './WanPanel';
 
 type Selected = { kind: 'group' | 'network'; id: string } | null;
@@ -48,6 +52,15 @@ export function Dashboard({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selected>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraftState] = useState<TileLayout | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const setDraft = useCallback((l: TileLayout) => {
+    setDraftState(l);
+    setDirty(true);
+  }, []);
+  const scope = view === 'status' ? `status:${endpoint?.split('/').pop() ?? ''}` : view;
+  const tl = useTileLayout(scope);
 
   useEffect(() => {
     setSite(readPref('ud.site', ''));
@@ -117,6 +130,42 @@ export function Dashboard({
 
   const error = fetchError ?? data?.error ?? null;
 
+  const open = useCallback((t: DetailTarget) => setSelected(t.kind === 'group' ? { kind: 'group', id: t.group.id } : { kind: 'network', id: t.network.id }), []);
+
+  const tiles: TileDef[] = useMemo(() => {
+    if (!data) return [];
+    const wan: TileDef = { id: 'wan', title: 'WAN-Durchsatz', w: 8, h: 2, render: () => <WanPanel data={data} /> };
+    if (view === 'network') {
+      return [...kpiTiles(data), wan, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open })];
+    }
+    if (view === 'hardware') return [...kpiTiles(data), ...hardwareTiles(data)];
+    const showWan = !!data.statusPage?.showWan;
+    const nets = networkTiles({ groups: data.groups, networks: data.networks, ungrouped: [], onOpen: open });
+    return [...(showWan ? [...kpiTiles(data), { ...wan, w: nets.length ? 8 : 12 } as TileDef] : []), ...nets, ...(data.deviceGroups.length ? hardwareTiles(data) : [])];
+  }, [data, view, open]);
+
+  const active = editing && draft ? draft : tl.layout;
+  const order = useMemo(() => resolveOrder(tiles.map((t) => t.id), active), [tiles, active]);
+
+  const startEdit = () => {
+    setDraftState({ ...tl.layout, order });
+    setDirty(false);
+    setEditing(true);
+    setSelected(null);
+  };
+  const stopEdit = () => {
+    setEditing(false);
+    setDraftState(null);
+  };
+
+  const empty =
+    data &&
+    (view === 'network'
+      ? !data.groups.length && !data.ungrouped.length
+      : view === 'hardware'
+        ? !hasHardware(data)
+        : !data.groups.length && !data.deviceGroups.length && !data.statusPage?.showWan);
+
   return (
     <>
       <DashboardHeader
@@ -136,9 +185,11 @@ export function Dashboard({
         onReload={() => void load()}
         onLogout={logout}
         view={view}
+        editing={editing}
+        onEdit={() => (editing ? stopEdit() : startEdit())}
       />
 
-      <main className="mx-auto max-w-[1800px] space-y-8 px-4 py-6 lg:px-6">
+      <main className="mx-auto max-w-[1800px] space-y-4 px-3 pb-24 pt-3 sm:space-y-5 sm:px-4 sm:py-5 lg:px-6">
         {error && (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -149,68 +200,63 @@ export function Dashboard({
           </div>
         )}
 
+        {editing && draft && (
+          <EditBar
+            tiles={tiles}
+            draft={draft}
+            canSaveOwn={tl.canSaveOwn}
+            canSaveDefault={tl.canSaveDefault}
+            hasDefault={tl.hasDefault}
+            error={tl.error}
+            onChange={setDraft}
+            onCancel={stopEdit}
+            onDone={() => {
+              // Nach „Zurücksetzen“ ohne weitere Änderung kein eigenes Layout anlegen
+              if (dirty) void tl.save({ ...draft, order });
+              stopEdit();
+            }}
+            onReset={() => {
+              void tl.reset();
+              setDraftState({ ...tl.defaultLayout });
+              setDirty(false);
+            }}
+            onSaveDefault={() => {
+              void tl.saveAsDefault({ ...draft, order });
+              stopEdit();
+            }}
+            onClearDefault={() => void tl.clearDefault()}
+          />
+        )}
+
         {!data && !error && (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="tile-grid">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-48 animate-pulse rounded-xl border border-noc-line bg-noc-panel" />
+              <div
+                key={i}
+                className="tile-cell h-40 animate-pulse rounded-xl border border-noc-line bg-noc-panel"
+                style={{ ['--span-lg' as string]: 4, ['--span-sm' as string]: 3, ['--span-xs' as string]: 1, ['--rows' as string]: 2 }}
+              />
             ))}
           </div>
         )}
 
-        {data && (
-          <>
-            {view === 'network' && (
-              <>
-                <WanPanel data={data} />
+        {data && view === 'status' && data.statusPage?.description && <p className="text-sm text-noc-muted">{data.statusPage.description}</p>}
 
-            <section>
-              <SectionTitle icon={<Layers className="h-4 w-4" />}>Netzwerke & VLAN-Gruppen</SectionTitle>
-              <NetworkSection
-                groups={data.groups}
-                networks={data.networks}
-                ungrouped={data.ungrouped}
-                onOpen={(t) => setSelected(t.kind === 'group' ? { kind: 'group', id: t.group.id } : { kind: 'network', id: t.network.id })}
-              />
-            </section>
+        {data && <TileGrid tiles={tiles} order={order} layout={active} editing={editing} onChange={setDraft} />}
 
-              </>
-            )}
-            {view === 'hardware' && <HardwareSection data={data} />}
-            {view === 'status' && (
-              <>
-                {data.statusPage?.description && <p className="text-sm text-noc-muted">{data.statusPage.description}</p>}
-                {data.statusPage?.showWan && <WanPanel data={data} />}
-                {data.groups.length > 0 && (
-                  <section>
-                    <SectionTitle icon={<Layers className="h-4 w-4" />}>Netzwerke & VLAN-Gruppen</SectionTitle>
-                    <NetworkSection
-                      groups={data.groups}
-                      networks={data.networks}
-                      ungrouped={[]}
-                      onOpen={(t) => setSelected(t.kind === 'group' ? { kind: 'group', id: t.group.id } : { kind: 'network', id: t.network.id })}
-                    />
-                  </section>
-                )}
-                {data.deviceGroups.length > 0 && <HardwareSection data={data} />}
-                {!data.groups.length && !data.deviceGroups.length && !data.statusPage?.showWan && (
-                  <div className="rounded-xl border border-dashed border-noc-line p-8 text-center text-sm text-noc-muted">
-                    Dieser Statusseite sind noch keine Gruppen zugeordnet.
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
+        {empty &&
+          (view === 'hardware' ? (
+            <HardwareEmpty />
+          ) : (
+            <div className="rounded-xl border border-dashed border-noc-line p-8 text-center text-sm text-noc-muted">
+              {view === 'network'
+                ? 'Keine Netzwerke freigegeben. Im Admin-Bereich können Gruppen angelegt oder nicht gruppierte VLANs eingeblendet werden.'
+                : 'Dieser Statusseite sind noch keine Gruppen zugeordnet.'}
+            </div>
+          ))}
       </main>
 
-      {detail && data && (
-        <DetailDrawer
-          target={detail}
-          networks={data.networks}
-          onClose={() => setSelected(null)}
-          onOpen={(t) => setSelected(t.kind === 'group' ? { kind: 'group', id: t.group.id } : { kind: 'network', id: t.network.id })}
-        />
-      )}
+      {detail && data && !editing && <DetailDrawer target={detail} networks={data.networks} onClose={() => setSelected(null)} onOpen={open} />}
     </>
   );
 }

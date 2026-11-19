@@ -338,7 +338,7 @@ export function StatusPagesSection({
                 href={`/s/${p.slug}`}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center border-l border-white/[0.06] px-3.5 text-noc-muted hover:bg-white/[0.03] hover:text-sky-300"
+                className="flex items-center border-l border-fg/[0.06] px-3.5 text-noc-muted hover:bg-fg/[0.03] hover:text-sky-300"
                 title="Seite öffnen"
                 aria-label={`${p.title} öffnen`}
               >

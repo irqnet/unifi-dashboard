@@ -285,7 +285,7 @@ export function DeviceGroups({
             <Row
               key={d.mac}
               icon={
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-fg/[0.06]">
                   <DeviceIcon type={d.type} className="h-3.5 w-3.5 text-noc-muted" />
                 </span>
               }

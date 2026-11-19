@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getConfig } from './env';
+import { parseLayout, type TileLayout } from './layout';
 
 export type DisplayMode = 'consolidated' | 'expanded';
 
@@ -185,6 +186,14 @@ function migrate(db: Database.Database) {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
       PRIMARY KEY (user_id, page_id)
+    );
+    -- Kachel-Layouts: user_id 0 = Standardlayout (vom Admin), sonst Benutzerkonto
+    CREATE TABLE IF NOT EXISTS dashboard_layouts (
+      user_id INTEGER NOT NULL,
+      scope TEXT NOT NULL,
+      layout TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, scope)
     );
   `);
   const row = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
@@ -582,6 +591,7 @@ export function updateUser(id: number, input: UserInput): User | null {
 }
 
 export function deleteUser(id: number): boolean {
+  getDb().prepare('DELETE FROM dashboard_layouts WHERE user_id = ?').run(id);
   return getDb().prepare('DELETE FROM users WHERE id = ?').run(id).changes > 0;
 }
 
@@ -718,4 +728,31 @@ export function updateStatusPage(id: number, input: StatusPageInput): StatusPage
 
 export function deleteStatusPage(id: number): boolean {
   return getDb().prepare('DELETE FROM status_pages WHERE id = ?').run(id).changes > 0;
+}
+
+// --- Kachel-Layouts -------------------------------------------------------------
+/** user_id 0 steht für das Standardlayout, das ein Admin für alle festlegt. */
+export const DEFAULT_LAYOUT_OWNER = 0;
+
+export function getLayout(userId: number, scope: string): TileLayout | null {
+  const row = getDb().prepare('SELECT layout FROM dashboard_layouts WHERE user_id = ? AND scope = ?').get(userId, scope) as { layout: string } | undefined;
+  if (!row) return null;
+  try {
+    return parseLayout(JSON.parse(row.layout));
+  } catch {
+    return null;
+  }
+}
+
+export function saveLayout(userId: number, scope: string, layout: TileLayout) {
+  getDb()
+    .prepare(
+      `INSERT INTO dashboard_layouts (user_id, scope, layout, updated_at) VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT (user_id, scope) DO UPDATE SET layout = excluded.layout, updated_at = excluded.updated_at`,
+    )
+    .run(userId, scope, JSON.stringify(layout));
+}
+
+export function deleteLayout(userId: number, scope: string) {
+  getDb().prepare('DELETE FROM dashboard_layouts WHERE user_id = ? AND scope = ?').run(userId, scope);
 }
