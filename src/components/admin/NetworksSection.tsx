@@ -220,7 +220,7 @@ export function NetworksSection({
           <div className="hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="border-b border-white/[0.06] text-left text-[12px] text-noc-muted">
+                <tr className="border-b border-fg/[0.06] text-left text-[12px] text-noc-muted">
                   <th className="px-3.5 py-2 font-medium">Name</th>
                   <th className="px-3 py-2 font-medium">VLAN</th>
                   <th className="px-3 py-2 font-medium">Subnetz</th>
@@ -229,7 +229,7 @@ export function NetworksSection({
                   <th className="w-24 px-3.5 py-2 text-center font-medium">Anonym</th>
                 </tr>
               </thead>
-              <tbody className="[&>tr+tr]:border-t [&>tr+tr]:border-white/[0.06]">
+              <tbody className="[&>tr+tr]:border-t [&>tr+tr]:border-fg/[0.06]">
                 {networks.map((n) => {
                   const g = n.groupId !== null ? groupById.get(n.groupId) : undefined;
                   return (
@@ -247,7 +247,7 @@ export function NetworksSection({
                             {g.name}
                           </span>
                         ) : (
-                          <span className="text-[#5c6878]">Keine</span>
+                          <span className="text-noc-faint">Keine</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-center">
@@ -295,7 +295,7 @@ export function ReorderButton({ label, disabled, onClick, children }: { label: s
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="rounded-md p-1.5 text-noc-muted hover:bg-white/[0.06] hover:text-noc-text focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-25"
+      className="rounded-md p-1.5 text-noc-muted hover:bg-fg/[0.06] hover:text-noc-text focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-25"
     >
       {children}
     </button>

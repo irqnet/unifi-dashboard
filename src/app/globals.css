@@ -2,30 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* --- Farben: Dunkel (Standard) und Hell, als RGB-Tripel für Tailwind ------------ */
+:root,
+html.dark {
   color-scheme: dark;
+  --noc-bg: 10 13 18;
+  --noc-panel: 17 22 30;
+  --noc-raised: 22 29 39;
+  --noc-line: 34 43 56;
+  --noc-muted: 125 139 161;
+  --noc-text: 215 222 233;
+  --noc-strong: 255 255 255;
+  --noc-group: 20 26 35;
+  --noc-sidebar: 14 19 26;
+  --noc-sheet: 12 16 22;
+  --noc-soft: 207 215 227;
+  --noc-faint: 92 104 120;
+  --noc-off: 42 52 66;
+  --noc-seg: 44 55 70;
+  --noc-radio: 75 86 102;
+  --fg: 255 255 255;
+  --c-down: 56 189 248;
+  --c-up: 167 139 250;
+  --c-track: 34 43 56;
+  --c-grid: 34 43 56;
+  --c-axis: 125 139 161;
+  --tile-shadow: none;
+  --sky-300: 125 211 252;
+  --sky-400: 56 189 248;
+  --violet-300: 196 181 253;
+  --rose-200: 254 205 211;
+  --rose-300: 253 164 175;
+  --rose-400: 251 113 133;
+  --emerald-300: 110 231 183;
+  --emerald-400: 52 211 153;
+  --amber-100: 254 243 199;
+  --amber-200: 253 230 138;
+  --amber-300: 252 211 77;
+  --yellow-300: 253 224 71;
+  --page-glow-a: rgba(56, 189, 248, 0.06);
+  --page-glow-b: rgba(167, 139, 250, 0.05);
+}
+
+/* Hell: an macOS angelehnt (hellgraue Fläche, weiße Kacheln, Systemblau) */
+html.light {
+  color-scheme: light;
+  --noc-bg: 245 245 247;
+  --noc-panel: 255 255 255;
+  --noc-raised: 242 242 245;
+  --noc-line: 224 224 230;
+  --noc-muted: 110 110 115;
+  --noc-text: 29 29 31;
+  --noc-strong: 0 0 0;
+  --noc-group: 255 255 255;
+  --noc-sidebar: 236 236 240;
+  --noc-sheet: 245 245 247;
+  --noc-soft: 60 60 67;
+  --noc-faint: 160 160 168;
+  --noc-off: 228 228 233;
+  --noc-seg: 255 255 255;
+  --noc-radio: 190 190 196;
+  --fg: 0 0 0;
+  --c-down: 0 122 255;
+  --c-up: 124 58 237;
+  --c-track: 232 232 237;
+  --c-grid: 229 229 234;
+  --c-axis: 142 142 147;
+  --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 10px rgba(0, 0, 0, 0.04);
+  --sky-300: 0 113 227;
+  --sky-400: 0 122 255;
+  --violet-300: 124 58 237;
+  --rose-200: 190 18 60;
+  --rose-300: 225 29 72;
+  --rose-400: 225 29 72;
+  --emerald-300: 4 120 87;
+  --emerald-400: 5 150 105;
+  --amber-100: 120 53 15;
+  --amber-200: 146 64 14;
+  --amber-300: 180 83 9;
+  --yellow-300: 202 138 4;
+  --page-glow-a: transparent;
+  --page-glow-b: transparent;
 }
 
 html,
 body {
-  background: #0a0d12;
-  color: #d7dee9;
+  background: rgb(var(--noc-bg));
+  color: rgb(var(--noc-text));
 }
 
 body {
-  background-image: radial-gradient(1200px 600px at 10% -10%, rgba(56, 189, 248, 0.06), transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, rgba(167, 139, 250, 0.05), transparent 60%);
+  background-image: radial-gradient(1200px 600px at 10% -10%, var(--page-glow-a), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, var(--page-glow-b), transparent 60%);
   background-attachment: fixed;
   min-height: 100vh;
 }
 
 ::selection {
-  background: rgba(56, 189, 248, 0.3);
+  background: rgb(var(--c-down) / 0.3);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #222b38 transparent;
+  scrollbar-color: rgb(var(--noc-line)) transparent;
 }
 
 input,
@@ -36,11 +115,11 @@ textarea {
 
 /* Randloses Eingabefeld für die gruppierten Listen im Admin-Bereich */
 .admin-input {
-  @apply w-full rounded-md border-0 bg-transparent px-0 py-1 text-sm text-noc-text placeholder:text-[#5c6878] focus:ring-0;
+  @apply w-full rounded-md border-0 bg-transparent px-0 py-1 text-sm text-noc-text placeholder:text-noc-faint focus:ring-0;
 }
 .admin-input:focus-visible {
   @apply outline-none;
-  box-shadow: inset 0 -1px 0 #38bdf8;
+  box-shadow: inset 0 -1px 0 rgb(var(--c-down));
 }
 
 /* --- Voucher-Druckansicht ---------------------------------------------- */
@@ -60,4 +139,48 @@ html:has(.voucher-print) body {
   .no-print {
     display: none !important;
   }
+}
+
+/* --- Kachel-Raster ------------------------------------------------------- */
+/* Breite in 12tel (2,3,4,6,8,12), Höhe in Reihen; Reihen wachsen mit dem Inhalt. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  grid-auto-rows: minmax(0, auto);
+  gap: 10px;
+}
+.tile-cell {
+  grid-column: span var(--span-xs) / span var(--span-xs);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .tile-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-auto-rows: minmax(var(--tile-row), auto);
+    gap: 12px;
+    --tile-row: 108px;
+  }
+  .tile-cell {
+    grid-column: span var(--span-sm) / span var(--span-sm);
+    grid-row: span var(--rows) / span var(--rows);
+  }
+}
+@media (min-width: 1024px) {
+  .tile-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .tile-cell {
+    grid-column: span var(--span-lg) / span var(--span-lg);
+  }
+}
+.tile-shadow {
+  box-shadow: var(--tile-shadow);
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

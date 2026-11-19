@@ -19,13 +19,13 @@ import { Button } from '../ui/primitives';
 
 /** Karten und Überschriften im Stil des Admin-Bereichs */
 function Panel({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={clsx('rounded-xl bg-[#141a23] ring-1 ring-inset ring-white/[0.04]', className)}>{children}</div>;
+  return <div className={clsx('rounded-xl bg-noc-group ring-1 ring-inset ring-fg/[0.04]', className)}>{children}</div>;
 }
 
 function SectionTitle({ icon, children, right }: { icon?: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white">
+      <h2 className="flex items-center gap-2 text-[15px] font-semibold text-noc-strong">
         {icon}
         {children}
       </h2>
@@ -434,7 +434,7 @@ export function VoucherManager({ site }: { site: string }) {
     <>
       <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-white">Voucher</h1>
+          <h1 className="text-[26px] font-bold tracking-tight text-noc-strong">Voucher</h1>
           <p className="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-noc-muted">
             Zugangscodes für das Gäste-WLAN erstellen, drucken und widerrufen.
             {data?.wifi.ssid && (
@@ -447,7 +447,7 @@ export function VoucherManager({ site }: { site: string }) {
         </div>
         <div className="flex items-center gap-2">
           {data?.mock && <span className="rounded-full bg-amber-400/[0.12] px-2 py-px text-[11.5px] font-medium text-amber-300">Demo-Modus</span>}
-          <button type="button" onClick={() => void load()} className="rounded-lg p-1.5 text-noc-muted hover:bg-white/[0.06] hover:text-noc-text" aria-label="Aktualisieren" title="Aktualisieren">
+          <button type="button" onClick={() => void load()} className="rounded-lg p-1.5 text-noc-muted hover:bg-fg/[0.06] hover:text-noc-text" aria-label="Aktualisieren" title="Aktualisieren">
             <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
           </button>
         </div>
