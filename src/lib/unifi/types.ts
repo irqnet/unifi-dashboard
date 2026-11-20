@@ -78,8 +78,19 @@ export interface RawDevice {
   'tx_bytes-r'?: number;
   'bytes-r'?: number;
   uplink?: { 'rx_bytes-r'?: number; 'tx_bytes-r'?: number; speed?: number; type?: string; name?: string; comment?: string; ip?: string };
-  wan1?: { ip?: string; up?: boolean; name?: string; ifname?: string };
-  wan2?: { ip?: string; up?: boolean; name?: string; ifname?: string };
+  wan1?: RawWanPort;
+  wan2?: RawWanPort;
+  wan3?: RawWanPort;
+}
+
+/** WAN-Anschluss am Gateway (stat/device: wan1, wan2 …) */
+export interface RawWanPort {
+  ip?: string;
+  up?: boolean;
+  name?: string;
+  ifname?: string;
+  'rx_bytes-r'?: number;
+  'tx_bytes-r'?: number;
 }
 
 export interface RawClient {
