@@ -2,6 +2,7 @@
   "name": "unifi-dashboard",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "UniFi network status & monitoring dashboard with password/Turnstile gate, admin area and VLAN grouping (English / German)",
   "scripts": {
     "dev": "next dev",

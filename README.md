@@ -233,3 +233,11 @@ npm run typecheck       # also catches missing German translations
 | `POST` | `/api/admin/vouchers/delete` | admin | revoke vouchers (`{ site, ids }`) |
 
 API error messages follow the caller's language (account, cookie or `Accept-Language`).
+
+## License
+
+Copyright (C) 2026 Christoph ([@irqnet](https://github.com/irqnet))
+
+This project is licensed under the **GNU Affero General Public License v3.0 only** (`AGPL-3.0-only`), see [LICENSE](LICENSE).
+
+In short: you may use, modify and redistribute it, but modified versions you distribute **or make available to users over a network** must also be released under the AGPL-3.0, including the source code. Third-party components keep their own licences.
