@@ -1,6 +1,6 @@
 # UniFi Network Status & Monitoring Dashboard
 
-Real-time NOC-style status page for UniFi networks, available in **English and German**. The **Networks** page (`/`) shows WAN throughput with utilisation gauges against the "Expected ISP Speeds" configured in UniFi for the active WAN (failover included) and consolidated VLAN groups with live traffic history. The **Hardware** page (`/hardware`) shows switches with a port matrix and access points, organised by device groups. Access is protected by a combined **password & Cloudflare Turnstile gate** and a separate **admin area** for grouping networks/VLANs.
+Real-time NOC-style status page for UniFi networks, available in **English and German**. The **Networks** page (`/`) shows WAN throughput with utilisation gauges against the "Expected ISP Speeds" configured in UniFi for the active WAN (failover included) and consolidated VLAN groups with live traffic history. The **Hardware** page (`/hardware`) shows switches with a port matrix and access points, organised by device groups. It also provides voucher management for guest wifi access. Access is protected by a combined **password & Cloudflare Turnstile gate** and a separate **admin area** for grouping networks/VLANs.
 
 - **Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS · Lucide · Recharts · SQLite (`better-sqlite3`) · `jose` (JWT)
 - **Operation:** locally built container image with Podman / `podman-compose` (no registry build, no GitHub Actions)
