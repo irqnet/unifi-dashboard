@@ -22,7 +22,7 @@ function loadScript(): Promise<void> {
     s.async = true;
     s.defer = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Turnstile konnte nicht geladen werden'));
+    s.onerror = () => reject(new Error('Failed to load Turnstile'));
     document.head.appendChild(s);
   });
   return window.__udTurnstileLoading;

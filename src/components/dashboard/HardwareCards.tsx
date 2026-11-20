@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { ArrowDown, ArrowUp, Clock, Radio, Router, Thermometer, Users, Zap } from 'lucide-react';
+import { useT } from '@/components/i18n/I18nProvider';
 import { formatBps, formatUptime } from '@/lib/format';
 import type { ApView, SwitchView } from '@/lib/views';
 import { Meter, StatusBadge } from '../ui/primitives';
@@ -27,6 +28,7 @@ function DeviceHeader({ icon, name, model, ip, version, online }: { icon: React.
 }
 
 export function SwitchCard({ sw }: { sw: SwitchView }) {
+  const t = useT();
   const upPorts = sw.ports.filter((p) => p.up).length;
   return (
     <div className={clsx('rounded-xl border bg-noc-panel p-4', sw.online ? 'border-noc-line' : 'border-rose-500/40')}>
@@ -40,14 +42,14 @@ export function SwitchCard({ sw }: { sw: SwitchView }) {
         </div>
         <div>
           <div className="flex items-center gap-1 text-noc-muted">
-            <Thermometer className="h-3 w-3" /> Temperatur
+            <Thermometer className="h-3 w-3" /> {t('hardware.temperature')}
           </div>
           <div className={clsx('font-mono', sw.overheating || (sw.temperature ?? 0) > 70 ? 'text-rose-300' : 'text-noc-text')}>
             {sw.temperature !== null ? `${sw.temperature.toFixed(0)} °C` : '–'}
           </div>
         </div>
         <div>
-          <div className="text-noc-muted">Ports aktiv</div>
+          <div className="text-noc-muted">{t('hardware.portsActive')}</div>
           <div className="font-mono text-noc-text">
             {upPorts} / {sw.ports.length}
           </div>
@@ -74,16 +76,17 @@ export function SwitchCard({ sw }: { sw: SwitchView }) {
 }
 
 export function SpeedLegend() {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-3 text-[11px] text-noc-muted">
       {SPEED_LEGEND.map((l) => (
         <span key={l.label} className="flex items-center gap-1.5">
           <span className={clsx('h-3 w-3 rounded-sm border', l.cls)} />
-          {l.label}
+          {l.label === 'Offline' ? t('hardware.noLink') : l.label}
         </span>
       ))}
       <span className="flex items-center gap-1">
-        <Zap className="h-3 w-3 fill-yellow-300 text-yellow-300" /> PoE aktiv
+        <Zap className="h-3 w-3 fill-yellow-300 text-yellow-300" /> {t('hardware.poeActive')}
       </span>
     </div>
   );
@@ -92,6 +95,7 @@ export function SpeedLegend() {
 const BAND_COLOR: Record<string, string> = { '2.4': 'text-amber-300', '5': 'text-sky-300', '6': 'text-violet-300', '?': 'text-noc-muted' };
 
 export function ApCard({ ap }: { ap: ApView }) {
+  const t = useT();
   return (
     <div className={clsx('rounded-xl border bg-noc-panel p-4', ap.online ? 'border-noc-line' : 'border-rose-500/40')}>
       <DeviceHeader icon={<Radio className="h-4 w-4 text-sky-400" />} name={ap.name} model={ap.model} ip={ap.ip} version={ap.version} online={ap.online} />
@@ -116,7 +120,7 @@ export function ApCard({ ap }: { ap: ApView }) {
         </div>
       </div>
       <div className="space-y-2">
-        {ap.radios.length === 0 && <p className="text-xs text-noc-muted">Keine Funkdaten.</p>}
+        {ap.radios.length === 0 && <p className="text-xs text-noc-muted">{t('hardware.noRadioData')}</p>}
         {ap.radios.map((r, i) => (
           <div key={i} className="grid grid-cols-[3.5rem,1fr,auto] items-center gap-2 text-xs">
             <span className={clsx('font-mono font-semibold', BAND_COLOR[r.band])}>{r.band} GHz</span>

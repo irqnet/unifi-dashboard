@@ -1,12 +1,12 @@
 /**
- * Demo-Daten für UNIFI_MOCK=true – ermöglicht Entwicklung und Präsentation
- * ohne erreichbaren Controller. Werte schwanken realistisch pro Poll.
+ * Demo data for UNIFI_MOCK=true – enables development and presentations
+ * without a reachable controller. Values fluctuate realistically per poll.
  */
 import type { RawClient, RawDevice, RawHealth, RawNetwork, RawPort, RawSite, SiteRawData } from './types';
 
 export const MOCK_SITES: RawSite[] = [
-  { name: 'default', desc: 'Hauptstandort' },
-  { name: 'filiale', desc: 'Filiale Nord' },
+  { name: 'default', desc: 'Main site' },
+  { name: 'branch', desc: 'Branch North' },
 ];
 
 function seeded(seed: number) {
@@ -21,15 +21,15 @@ const NETS: Omit<RawNetwork, '_id'>[] = [
   { name: 'LAN', purpose: 'corporate', vlan: undefined, ip_subnet: '192.168.1.1/24' },
   { name: 'Server', purpose: 'corporate', vlan: 30, vlan_enabled: true, ip_subnet: '10.0.30.1/24' },
   { name: 'Smart Home', purpose: 'corporate', vlan: 20, vlan_enabled: true, ip_subnet: '10.0.20.1/24' },
-  { name: 'Kameras', purpose: 'corporate', vlan: 40, vlan_enabled: true, ip_subnet: '10.0.40.1/24' },
-  { name: 'Gäste', purpose: 'guest', vlan: 10, vlan_enabled: true, ip_subnet: '10.0.10.1/24' },
-  { name: 'Nachbarn', purpose: 'guest', vlan: 11, vlan_enabled: true, ip_subnet: '10.0.11.1/24' },
+  { name: 'Cameras', purpose: 'corporate', vlan: 40, vlan_enabled: true, ip_subnet: '10.0.40.1/24' },
+  { name: 'Guests', purpose: 'guest', vlan: 10, vlan_enabled: true, ip_subnet: '10.0.10.1/24' },
+  { name: 'Neighbours', purpose: 'guest', vlan: 11, vlan_enabled: true, ip_subnet: '10.0.11.1/24' },
   { name: 'Management', purpose: 'corporate', vlan: 99, vlan_enabled: true, ip_subnet: '10.0.99.1/24' },
 ];
 
 const HOSTS = [
   'macbook-pro', 'iphone-anna', 'pixel-8', 'nas-01', 'proxmox-1', 'proxmox-2', 'hue-bridge', 'shelly-plug-1',
-  'shelly-plug-2', 'sonos-kueche', 'tv-wohnzimmer', 'cam-einfahrt', 'cam-garten', 'cam-haustuer', 'ipad',
+  'shelly-plug-2', 'sonos-kitchen', 'tv-living-room', 'cam-driveway', 'cam-garden', 'cam-front-door', 'ipad',
   'thinkpad', 'printer', 'homeassistant', 'pihole', 'guest-phone-1', 'guest-laptop', 'neighbor-tv', 'switch-console',
   'esp32-sensor', 'tado-bridge', 'kindle', 'galaxy-tab', 'nuc-media', 'backup-srv', 'mqtt-broker',
 ];
@@ -127,13 +127,13 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
     devices.push({
       _id: `${site}-sw-${s}`,
       mac: `aa:00:00:${base}1:00:0${s}`,
-      name: s === 0 ? 'Core Switch' : 'Switch Büro',
+      name: s === 0 ? 'Core Switch' : 'Office Switch',
       model: s === 0 ? 'USW-Pro-24-PoE' : 'USW-Lite-8-PoE',
       type: 'usw',
       ip: `192.168.1.${2 + s}`,
       version: '7.1.26',
       uptime: 864_000 + s * 3600,
-      state: s === 1 && site === 'filiale' ? 0 : 1,
+      state: s === 1 && site === 'branch' ? 0 : 1,
       general_temperature: 38 + live() * 12,
       has_temperature: true,
       total_max_power: s === 0 ? 400 : 52,
@@ -141,7 +141,7 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
     });
   }
 
-  const aps = site === 'default' ? ['AP Erdgeschoss', 'AP Obergeschoss', 'AP Garten'] : ['AP Filiale'];
+  const aps = site === 'default' ? ['AP Ground floor', 'AP Upstairs', 'AP Garden'] : ['AP Branch'];
   aps.forEach((name, a) => {
     const radios = [
       { name: 'wifi0', radio: 'ng', channel: [1, 6, 11][a % 3], cu_total: Math.floor(20 + live() * 50), num_sta: Math.floor(live() * 8) },
@@ -196,7 +196,7 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
 
   const totalDown = clients.reduce((s, c) => s + (c['tx_bytes-r'] ?? c['wired-tx_bytes-r'] ?? 0), 0);
   const totalUp = clients.reduce((s, c) => s + (c['rx_bytes-r'] ?? c['wired-rx_bytes-r'] ?? 0), 0);
-  // Durchsatz je WAN-Anschluss (Lastverteilung: Großteil über WAN1)
+  // Throughput per WAN connection (load balancing: most of it via WAN1)
   const gwWan = devices[0];
   if (gwWan.wan1) Object.assign(gwWan.wan1, { 'rx_bytes-r': totalDown * 0.85, 'tx_bytes-r': totalUp * 0.85 });
   if (gwWan.wan2) Object.assign(gwWan.wan2, { 'rx_bytes-r': totalDown * 0.15, 'tx_bytes-r': totalUp * 0.15 });
@@ -205,7 +205,7 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
       subsystem: 'wan',
       status: 'ok',
       wan_ip: site === 'default' ? '203.0.113.42' : '198.51.100.7',
-      isp_name: 'Deutsche Glasfaser',
+      isp_name: 'Fibre ISP',
       gw_mac: gwMac,
       'gw_system-stats': devices[0]['system-stats'],
       'rx_bytes-r': totalDown,
@@ -222,7 +222,7 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
     { subsystem: 'lan', status: 'ok', num_user: clients.filter((c) => c.is_wired).length },
     { subsystem: 'wlan', status: 'ok', num_user: clients.filter((c) => !c.is_wired).length },
   ];
-  if (site === 'filiale') health[2].status = 'warning';
+  if (site === 'branch') health[2].status = 'warning';
 
   return { devices, clients, networks: netList, health };
 }

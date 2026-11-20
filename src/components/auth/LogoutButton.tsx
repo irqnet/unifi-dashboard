@@ -1,8 +1,10 @@
 'use client';
 
 import { LogOut } from 'lucide-react';
+import { useT } from '@/components/i18n/I18nProvider';
 
-export function LogoutButton({ className, label = 'Abmelden' }: { className?: string; label?: string }) {
+export function LogoutButton({ className, label }: { className?: string; label?: string }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -12,7 +14,7 @@ export function LogoutButton({ className, label = 'Abmelden' }: { className?: st
         window.location.assign('/gate');
       }}
     >
-      <LogOut className="h-3.5 w-3.5" /> {label}
+      <LogOut className="h-3.5 w-3.5" /> {label ?? t('common.signOut')}
     </button>
   );
 }

@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 function safeNext(raw: string | string[] | undefined): string {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  // Nur relative, interne Pfade erlauben (kein Open Redirect)
+  // Only allow relative, internal paths (no open redirect)
   return v && v.startsWith('/') && !v.startsWith('//') && !v.startsWith('/\\') ? v : '/';
 }
 

@@ -1,29 +1,38 @@
 /**
- * Zwei-Stufen-Zugriffsschutz:
- *  - "/" und "/api/unifi/*"         → Rolle viewer oder admin (sonst Gate-Seite bzw. 401)
- *  - "/admin", "/vouchers" und "/api/admin/*" → ausschließlich Rolle admin (sonst Admin-Login bzw. 401/403)
- *  - Benutzerkonten (Rolle user) sehen nur ihre Statusseiten; "/" zeigt deren Übersicht (/start)
- *  - öffentlich: /gate, /api/auth/verify, /api/health, statische Assets
- *  - Statusseiten /s/<slug> und /api/status/<slug> prüfen den Zugriff selbst (öffentliche Seiten,
- *    Zuweisung an Benutzer) – dafür ist ein DB-Zugriff nötig, der in der Middleware nicht möglich ist
+ * Two-tier access control:
+ *  - "/" and "/api/unifi/*"         → role viewer or admin (otherwise gate page or 401)
+ *  - "/admin", "/vouchers" and "/api/admin/*" → role admin only (otherwise admin login or 401/403)
+ *  - user accounts (role user) only see their status pages; "/" shows their overview (/start)
+ *  - public: /gate, /api/auth/verify, /api/health, /api/locale, static assets
+ *  - status pages /s/<slug> and /api/status/<slug> check access themselves (public pages,
+ *    user assignment) – that needs DB access, which is not possible in the middleware
  */
 import { NextResponse, type NextRequest } from 'next/server';
+import { isLocale, LOCALE_COOKIE, matchAcceptLanguage, DEFAULT_LOCALE } from '@/lib/i18n/config';
+import { translate, type MessageKey } from '@/lib/i18n/translate';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 
-// /api/layout prüft den Zugriff selbst (Layouts auch für Statusseiten-Benutzer)
-const PUBLIC_PATHS = ['/gate', '/api/auth/verify', '/api/health', '/s', '/api/status', '/api/layout'];
+// /api/layout checks access itself (layouts also for status page users)
+const PUBLIC_PATHS = ['/gate', '/api/auth/verify', '/api/health', '/api/locale', '/s', '/api/status', '/api/layout'];
 
 /**
- * Statt HTTP-Redirects wird intern auf die Login-Seite umgeschrieben (Rewrite). Hintergrund:
- * Next.js (standalone) bildet absolute Redirect-URLs aus dem intern gebundenen Host
- * (localhost/0.0.0.0) – hinter Reverse-Proxy/Cloudflare würde der Browser falsch umgeleitet.
- * Die Login-Formulare navigieren nach Erfolg selbst auf die ursprünglich angefragte URL.
+ * Instead of HTTP redirects the request is rewritten internally to the login page. Reason:
+ * Next.js (standalone) builds absolute redirect URLs from the internally bound host
+ * (localhost/0.0.0.0) – behind a reverse proxy/Cloudflare the browser would be sent to the wrong place.
+ * After success the login forms navigate to the originally requested URL themselves.
  */
 function showPage(req: NextRequest, path: string) {
   const url = req.nextUrl.clone();
   url.pathname = path;
   url.search = '';
   return NextResponse.rewrite(url, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+/** JSON error in the visitor's language (cookie or browser; the DB default is not reachable here). */
+function jsonError(req: NextRequest, key: MessageKey, status: number) {
+  const cookie = req.cookies.get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(cookie) ? cookie : (matchAcceptLanguage(req.headers.get('accept-language')) ?? DEFAULT_LOCALE);
+  return NextResponse.json({ error: translate(locale, key) }, { status });
 }
 
 function isPublic(pathname: string) {
@@ -37,23 +46,23 @@ export async function middleware(req: NextRequest) {
   const session = await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const isApi = pathname.startsWith('/api/');
 
-  // Ohne gültige Session: alles außer öffentlichen Pfaden → Gate
+  // No valid session: everything except public paths → gate
   if (!session) {
-    if (isApi) return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    if (isApi) return jsonError(req, 'api.unauthenticated', 401);
     const res = showPage(req, '/gate');
     if (req.cookies.get(SESSION_COOKIE)) res.cookies.delete(SESSION_COOKIE);
     return res;
   }
 
-  // Admin-Login-Seite und Upgrade-Endpunkt: gültige Viewer-Session genügt
+  // Admin login page and upgrade endpoint: a valid viewer session is enough
   if (pathname === '/admin/login' || pathname === '/api/auth/admin' || pathname === '/api/auth/logout') {
     return NextResponse.next();
   }
 
-  // Benutzerkonten ohne Admin-Rolle: nur Statusseiten, Admin-Login und Abmelden
+  // User accounts without the admin role: only status pages, admin login and sign-out
   if (session.role === 'user') {
     if (pathname === '/start') return NextResponse.next();
-    if (isApi) return NextResponse.json({ error: 'Kein Zugriff' }, { status: 403 });
+    if (isApi) return jsonError(req, 'api.forbidden', 403);
     return showPage(req, '/start');
   }
 
@@ -64,7 +73,7 @@ export async function middleware(req: NextRequest) {
     pathname === '/vouchers' ||
     pathname.startsWith('/vouchers/');
   if (adminOnly && session.role !== 'admin') {
-    if (isApi) return NextResponse.json({ error: 'Admin-Rechte erforderlich' }, { status: 403 });
+    if (isApi) return jsonError(req, 'api.adminRequired', 403);
     return showPage(req, '/admin/login');
   }
 

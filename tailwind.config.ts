@@ -1,10 +1,10 @@
 import containerQueries from '@tailwindcss/container-queries';
 import type { Config } from 'tailwindcss';
 
-/** Farbe aus CSS-Variable (RGB-Tripel), damit Hell/Dunkel nur die Variablen tauscht. */
+/** Colour from a CSS variable (RGB triplet), so light/dark only swaps the variables. */
 const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
-/** Theme-abhängige Tönungen: im Dunkel-Modus die Tailwind-Originale, im Hell-Modus kräftigere Töne (siehe globals.css). */
+/** Theme-dependent tints: Tailwind originals in dark mode, stronger tones in light mode (see globals.css). */
 const tint = (color: string, shades: number[]) => Object.fromEntries(shades.map((s) => [s, v(`${color}-${s}`)]));
 
 const config: Config = {
@@ -20,9 +20,9 @@ const config: Config = {
           line: v('noc-line'),
           muted: v('noc-muted'),
           text: v('noc-text'),
-          // Überschriften (Dunkel: weiß, Hell: schwarz)
+          // Headings (dark: white, light: black)
           strong: v('noc-strong'),
-          // Admin-Bereich (macOS-Einstellungen-Stil)
+          // Admin area (macOS settings style)
           group: v('noc-group'),
           sidebar: v('noc-sidebar'),
           sheet: v('noc-sheet'),
@@ -32,7 +32,7 @@ const config: Config = {
           seg: v('noc-seg'),
           radio: v('noc-radio'),
         },
-        // Vordergrund-Overlay für dezente Flächen/Linien (Dunkel: weiß, Hell: schwarz)
+        // Foreground overlay for subtle surfaces/lines (dark: white, light: black)
         fg: v('fg'),
         accent: {
           DEFAULT: v('c-down'),

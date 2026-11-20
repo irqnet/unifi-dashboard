@@ -1,13 +1,20 @@
 'use client';
 
 import { ArrowDown, ArrowUp, Globe } from 'lucide-react';
+import { useI18n } from '@/components/i18n/I18nProvider';
 import { formatBps } from '@/lib/format';
+import type { MessageKey } from '@/lib/i18n/translate';
 import type { WanLinkView, WanView } from '@/lib/views';
 import { TrafficChart } from './TrafficChart';
 
-const SOURCE_LABEL = { isp: 'Expected ISP Speeds des aktiven WAN', config: 'gebuchte Bandbreite', speedtest: 'letzter Speedtest', peak: 'Spitzenwert im Verlauf' } as const;
+const SOURCE_LABEL: Record<NonNullable<WanView['capacitySource']>, MessageKey> = {
+  isp: 'wan.source.isp',
+  config: 'wan.source.config',
+  speedtest: 'wan.source.speedtest',
+  peak: 'wan.source.peak',
+};
 
-const mbit = (bps: number) => `${Math.round(bps / 1e6).toLocaleString('de-DE')} Mbit/s`;
+const mbit = (bps: number, tag: string) => `${Math.round(bps / 1e6).toLocaleString(tag)} Mbit/s`;
 
 function utilColor(pct: number) {
   if (pct >= 90) return '#f43f5e';
@@ -15,7 +22,7 @@ function utilColor(pct: number) {
   return null;
 }
 
-/** Halbkreis-Gauge: aktueller Durchsatz relativ zur Kapazität. */
+/** Semicircle gauge: current throughput relative to capacity. */
 function BandwidthGauge({
   label,
   icon,
@@ -29,6 +36,7 @@ function BandwidthGauge({
   capacity: number | null;
   color: string;
 }) {
+  const { t } = useI18n();
   const pct = capacity ? Math.min(100, (value / capacity) * 100) : 0;
   const stroke = utilColor(pct) ?? color;
   const r = 70;
@@ -60,7 +68,7 @@ function BandwidthGauge({
           {icon}
           {label}
         </span>
-        <span className="normal-case tracking-normal">{capacity ? `von ${formatBps(capacity, 0)}` : '· Kapazität unbekannt'}</span>
+        <span className="normal-case tracking-normal">{capacity ? t('wan.of', { capacity: formatBps(capacity, 0) }) : `· ${t('wan.capacityUnknown')}`}</span>
       </div>
     </div>
   );
@@ -75,14 +83,15 @@ function MiniStat({ label, value, className }: { label: string; value: string; c
   );
 }
 
-const STATE = {
-  active: { label: 'Aktiv', cls: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' },
-  standby: { label: 'Bereit', cls: 'bg-fg/5 text-noc-muted ring-noc-line' },
-  offline: { label: 'Offline', cls: 'bg-rose-500/15 text-rose-300 ring-rose-500/30' },
-} as const;
+const STATE: Record<WanLinkView['role'], { label: MessageKey; cls: string }> = {
+  active: { label: 'wan.role.active', cls: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' },
+  standby: { label: 'wan.role.standby', cls: 'bg-fg/5 text-noc-muted ring-noc-line' },
+  offline: { label: 'status.offline', cls: 'bg-rose-500/15 text-rose-300 ring-rose-500/30' },
+};
 
-/** Durchsatz eines WAN-Anschlusses. Mit `link` (Multi-WAN) eigene Kopfzeile je Anbieter. */
+/** Throughput of one WAN connection. With `link` (multi-WAN) a header of its own per provider. */
 export function WanPanel({ wan, link }: { wan: WanView; link?: WanLinkView }) {
+  const { t, tag } = useI18n();
   if (link) wan = link;
   const h = wan.history;
   const peakDown = h.reduce((m, p) => Math.max(m, p.down), 0);
@@ -95,7 +104,7 @@ export function WanPanel({ wan, link }: { wan: WanView; link?: WanLinkView }) {
     <section className="tile-shadow flex h-full flex-col rounded-xl border border-noc-line bg-noc-panel p-3 @md:p-4 @3xl:p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-noc-text">
-          <Globe className="h-4 w-4 shrink-0 text-noc-muted" /> {link ? link.name : 'WAN-Durchsatz'}
+          <Globe className="h-4 w-4 shrink-0 text-noc-muted" /> {link ? link.name : t('wan.throughput')}
           {wan.isp && <span className="truncate font-normal text-noc-muted">· {wan.isp}</span>}
         </h2>
         {link ? (
@@ -105,7 +114,7 @@ export function WanPanel({ wan, link }: { wan: WanView; link?: WanLinkView }) {
               <span className="flex items-center gap-2 text-xs text-noc-muted">
                 <span className="hidden @md:inline">{link.key === 'WAN' ? 'WAN1' : link.key}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${st.cls}`}>
-                  {st.label}
+                  {t(st.label)}
                   {link.role === 'active' && link.weight !== null ? ` · ${link.weight} %` : ''}
                 </span>
               </span>
@@ -128,12 +137,12 @@ export function WanPanel({ wan, link }: { wan: WanView; link?: WanLinkView }) {
             </div>
             {wan.expectedDown ? (
               <div className="font-mono text-sm tabular-nums">
-                <span className="text-sky-300">↓ {mbit(wan.expectedDown)}</span>
+                <span className="text-sky-300">↓ {mbit(wan.expectedDown, tag)}</span>
                 <span className="mx-2 text-noc-muted">/</span>
-                <span className="text-violet-300">↑ {wan.expectedUp ? mbit(wan.expectedUp) : '–'}</span>
+                <span className="text-violet-300">↑ {wan.expectedUp ? mbit(wan.expectedUp, tag) : '–'}</span>
               </div>
             ) : (
-              <div className="text-xs text-noc-muted">In UniFi nicht hinterlegt (WAN-Einstellungen → Expected ISP Speeds)</div>
+              <div className="text-xs text-noc-muted">{t('wan.expectedMissing')}</div>
             )}
           </div>
         </div>
@@ -142,18 +151,18 @@ export function WanPanel({ wan, link }: { wan: WanView; link?: WanLinkView }) {
             <TrafficChart id={link ? `wan-${link.key}` : 'wan'} data={h} fill />
           </div>
           <div className="mt-3 hidden grid-cols-2 gap-2 @md:grid @5xl:grid-cols-4">
-            <MiniStat label="Spitze Download" value={formatBps(peakDown)} className="text-sky-300" />
-            <MiniStat label="Ø Download" value={formatBps(avgDown)} className="text-sky-300" />
-            <MiniStat label="Spitze Upload" value={formatBps(peakUp)} className="text-violet-300" />
-            <MiniStat label="Ø Upload" value={formatBps(avgUp)} className="text-violet-300" />
+            <MiniStat label={t('wan.peakDownload')} value={formatBps(peakDown)} className="text-sky-300" />
+            <MiniStat label={t('wan.avgDownload')} value={formatBps(avgDown)} className="text-sky-300" />
+            <MiniStat label={t('wan.peakUpload')} value={formatBps(peakUp)} className="text-violet-300" />
+            <MiniStat label={t('wan.avgUpload')} value={formatBps(avgUp)} className="text-violet-300" />
           </div>
         </div>
       </div>
       <p className="mt-3 hidden text-[11px] text-noc-muted @md:block">
         {wan.capacitySource
-          ? `Auslastung bezogen auf ${link && wan.capacitySource === 'isp' ? 'Expected ISP Speeds dieses Anschlusses' : SOURCE_LABEL[wan.capacitySource]}. `
+          ? `${t('wan.utilisationBasis', { basis: t(link && wan.capacitySource === 'isp' ? 'wan.source.ispLink' : SOURCE_LABEL[wan.capacitySource]) })} `
           : ''}
-        Spitze und Durchschnitt über die letzten {Math.max(1, minutes)} min.
+        {t('wan.peakAvgWindow', { minutes: Math.max(1, minutes) })}
       </p>
     </section>
   );

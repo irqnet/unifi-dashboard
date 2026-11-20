@@ -2,6 +2,7 @@
 
 import { Cpu, Gauge, Globe, Timer, Users, Zap } from 'lucide-react';
 import { formatBps, formatMbps } from '@/lib/format';
+import type { TFunction } from '@/lib/i18n/translate';
 import type { DashboardPayload } from '@/lib/views';
 import { Meter } from '../ui/primitives';
 import type { TileDef } from './TileGrid';
@@ -19,8 +20,8 @@ function Kpi({ icon, label, children, sub }: { icon: React.ReactNode; label: str
   );
 }
 
-/** Kennzahlen (früher in der Kopfzeile) als eigene kleine Kacheln. */
-export function kpiTiles(data: DashboardPayload): TileDef[] {
+/** Key figures (formerly in the header) as small tiles of their own. */
+export function kpiTiles(data: DashboardPayload, t: TFunction): TileDef[] {
   const { wan, totals, gateway } = data;
   const ic = 'h-3 w-3 shrink-0';
   return [
@@ -38,12 +39,12 @@ export function kpiTiles(data: DashboardPayload): TileDef[] {
     },
     {
       id: 'kpi:latency',
-      title: 'Latenz',
+      title: t('kpi.latency'),
       w: 2,
       h: 1,
       kpi: true,
       render: () => (
-        <Kpi icon={<Timer className={ic} />} label="Latenz" sub={wan.activeWan ?? undefined}>
+        <Kpi icon={<Timer className={ic} />} label={t('kpi.latency')} sub={wan.activeWan ?? undefined}>
           {wan.latency !== null ? `${wan.latency} ms` : '–'}
         </Kpi>
       ),
@@ -79,14 +80,14 @@ export function kpiTiles(data: DashboardPayload): TileDef[] {
       h: 1,
       kpi: true,
       render: () => (
-        <Kpi icon={<Users className={ic} />} label="Clients" sub={`${totals.wired} LAN · ${totals.wireless} WLAN`}>
+        <Kpi icon={<Users className={ic} />} label="Clients" sub={`${totals.wired} LAN · ${totals.wireless} ${t('common.wlan')}`}>
           {totals.total}
         </Kpi>
       ),
     },
     {
       id: 'kpi:gateway',
-      title: 'Gateway-Last',
+      title: t('kpi.gatewayLoad'),
       w: 2,
       h: 1,
       kpi: true,

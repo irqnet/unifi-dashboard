@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPage() {
-  // Defense-in-Depth zusätzlich zur Middleware
+  // Defense in depth on top of the middleware
   const session = await getSession();
   if (!session) redirect('/gate');
   if (session.role !== 'admin') redirect('/admin/login');

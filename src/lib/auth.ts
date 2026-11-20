@@ -1,7 +1,7 @@
 /**
- * Serverseitige Auth-Helfer (Node-Runtime): timing-safe Passwortvergleich,
- * Cloudflare-Turnstile-Verifikation, einfaches Rate-Limiting und Rollenprüfung
- * für Route Handler (Defense-in-Depth zusätzlich zur Middleware).
+ * Server-side auth helpers (Node runtime): timing-safe password comparison,
+ * Cloudflare Turnstile verification, simple rate limiting and role checks
+ * for route handlers (defense in depth on top of the middleware).
  */
 import 'server-only';
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
@@ -11,8 +11,9 @@ import { NextResponse } from 'next/server';
 import { getSettings, getStatusPageBySlug, getUser, listStatusPages, listStatusPagesForUser, type StatusPage } from './db';
 import { getAuthConfig } from './env';
 import { SESSION_COOKIE, SessionPayload, verifySessionToken } from './session';
+import { apiError } from '@/lib/i18n/server';
 
-/** Vergleicht zwei Strings in konstanter Zeit (auch bei unterschiedlicher Länge). */
+/** Compares two strings in constant time (also for different lengths). */
 export function safeEqual(input: string, expected: string): boolean {
   const a = createHash('sha256').update(input, 'utf8').digest();
   const b = createHash('sha256').update(expected, 'utf8').digest();
@@ -44,12 +45,12 @@ export async function verifyTurnstile(token: string, ip: string): Promise<boolea
     const data = (await res.json()) as { success?: boolean };
     return data.success === true;
   } catch (err) {
-    console.error('[turnstile] Verifikation fehlgeschlagen:', err);
+    console.error('[turnstile] Verification failed:', err);
     return false;
   }
 }
 
-// --- Rate-Limiting (In-Memory, pro IP) --------------------------------------
+// --- Rate limiting (in-memory, per IP) --------------------------------------
 const WINDOW_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
 const attempts = new Map<string, { count: number; reset: number }>();
@@ -74,7 +75,7 @@ export function clearRateLimit(key: string) {
   attempts.delete(key);
 }
 
-// --- Passwort-Hashing (scrypt) ---------------------------------------------------
+// --- Password hashing (scrypt) ---------------------------------------------------
 type ScryptOpts = { N: number; r: number; p: number; maxmem: number };
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: ScryptOpts) => Promise<Buffer>;
 const SCRYPT = { N: 16384, r: 8, p: 1 };
@@ -100,18 +101,18 @@ export async function verifyPassword(password: string, stored: string): Promise<
   }
 }
 
-/** Dummy-Hash, damit unbekannte Benutzernamen gleich lange brauchen wie falsche Passwörter. */
+/** Dummy hash so that unknown usernames take as long as wrong passwords. */
 let dummyHash: Promise<string> | null = null;
 export function getDummyHash(): Promise<string> {
   dummyHash ??= hashPassword(randomBytes(16).toString('hex'));
   return dummyHash;
 }
 
-// --- Session-Helfer ------------------------------------------------------------
+// --- Session helpers------------------------------------------------------------
 /**
- * Liest und prüft die Session. Bei Benutzerkonten wird zusätzlich gegen die DB geprüft
- * (gelöscht, gesperrt, Passwort/Rolle geändert → Session ungültig).
- * Der gemeinsame Zugang (viewer) wird ungültig, sobald er im Admin-Bereich abgeschaltet ist.
+ * Reads and validates the session. User accounts are additionally checked against the DB
+ * (deleted, disabled, password/role changed → session invalid).
+ * Shared access (viewer) becomes invalid as soon as it is switched off in the admin area.
  */
 export async function getSession(): Promise<SessionPayload | null> {
   const s = await verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
@@ -126,7 +127,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   return s;
 }
 
-/** Prüft, ob eine Statusseite angezeigt werden darf. */
+/** Checks whether a status page may be shown. */
 export function canViewPage(session: SessionPayload | null, page: StatusPage): boolean {
   if (page.isPublic) return true;
   if (!session) return false;
@@ -141,25 +142,25 @@ export function findPage(slug: string): StatusPage | null {
 }
 
 /**
- * Gibt eine 401/403-Antwort zurück, wenn die Rolle nicht ausreicht.
- * "viewer" = Gesamtansicht (gemeinsamer Zugang oder Admin); Benutzerkonten ohne
- * Admin-Rolle haben darauf keinen Zugriff.
+ * Returns a 401/403 response if the role is insufficient.
+ * "viewer" = full overview (shared access or admin); user accounts without the
+ * admin role have no access to it.
  */
 export async function requireRole(role: 'viewer' | 'admin'): Promise<{ session: SessionPayload } | { error: NextResponse }> {
   const session = await getSession();
   if (!session) {
-    return { error: NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 }) };
+    return { error: await apiError('api.unauthenticated', 401) };
   }
   if (role === 'admin' && session.role !== 'admin') {
-    return { error: NextResponse.json({ error: 'Admin-Rechte erforderlich' }, { status: 403 }) };
+    return { error: await apiError('api.adminRequired', 403) };
   }
   if (role === 'viewer' && session.role === 'user') {
-    return { error: NextResponse.json({ error: 'Kein Zugriff auf die Gesamtansicht' }, { status: 403 }) };
+    return { error: await apiError('api.noOverviewAccess', 403) };
   }
   return { session };
 }
 
-/** Statusseiten, die eine Session sehen darf (Admin/gemeinsamer Zugang: alle). */
+/** Status pages a session may see (admin/shared access: all). */
 export function visiblePages(session: SessionPayload | null): StatusPage[] {
   if (!session) return [];
   if (session.role === 'user') return session.uid !== undefined ? listStatusPagesForUser(session.uid) : [];

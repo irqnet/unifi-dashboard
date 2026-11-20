@@ -1,7 +1,9 @@
 'use client';
 
 import { ArrowDown, ArrowUp, Cable, ChevronRight, EyeOff, Layers, Network, Wifi } from 'lucide-react';
+import { useT } from '@/components/i18n/I18nProvider';
 import { formatBps } from '@/lib/format';
+import type { TFunction } from '@/lib/i18n/translate';
 import type { ClientCounts, GroupView, NetworkView } from '@/lib/views';
 import type { TileDef } from './TileGrid';
 import { TrafficChart } from './TrafficChart';
@@ -9,6 +11,7 @@ import { TrafficChart } from './TrafficChart';
 export type DetailTarget = { kind: 'group'; group: GroupView } | { kind: 'network'; network: NetworkView };
 
 function ClientSplit({ c }: { c: ClientCounts }) {
+  const t = useT();
   return (
     <div className="flex items-end gap-4">
       <div>
@@ -20,7 +23,7 @@ function ClientSplit({ c }: { c: ClientCounts }) {
           <Cable className="h-3 w-3" /> <span className="font-mono tabular-nums text-noc-text">{c.wired}</span> LAN
         </div>
         <div className="flex items-center gap-1.5">
-          <Wifi className="h-3 w-3" /> <span className="font-mono tabular-nums text-noc-text">{c.wireless}</span> WLAN
+          <Wifi className="h-3 w-3" /> <span className="font-mono tabular-nums text-noc-text">{c.wireless}</span> {t('common.wlan')}
         </div>
       </div>
     </div>
@@ -51,6 +54,7 @@ export function VlanTag({ vlan }: { vlan: number | null }) {
 }
 
 export function GroupCard({ group, networks, onOpen }: { group: GroupView; networks: Record<string, NetworkView>; onOpen: () => void }) {
+  const t = useT();
   const nets = group.networkIds.map((id) => networks[id]).filter(Boolean);
   return (
     <button
@@ -64,7 +68,7 @@ export function GroupCard({ group, networks, onOpen }: { group: GroupView; netwo
           <div className="flex items-center gap-2">
             <Layers className="hidden h-4 w-4 shrink-0 @[15rem]:block" style={{ color: group.color }} />
             <h3 className="truncate font-semibold text-noc-text">{group.name}</h3>
-            {group.anonymized && <EyeOff className="h-3.5 w-3.5 text-noc-muted" aria-label="Anonymisiert" />}
+            {group.anonymized && <EyeOff className="h-3.5 w-3.5 text-noc-muted" aria-label={t('common.anonymized')} />}
           </div>
           {group.description && <p className="mt-0.5 truncate text-xs text-noc-muted">{group.description}</p>}
         </div>
@@ -90,6 +94,7 @@ export function GroupCard({ group, networks, onOpen }: { group: GroupView; netwo
 }
 
 export function NetworkCard({ network, onOpen, accent, groupName }: { network: NetworkView; onOpen: () => void; accent?: string; groupName?: string }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -102,7 +107,7 @@ export function NetworkCard({ network, onOpen, accent, groupName }: { network: N
           <div className="flex items-center gap-2">
             <Network className="hidden h-4 w-4 shrink-0 text-noc-muted @[15rem]:block" />
             <h3 className="truncate font-semibold text-noc-text">{network.name}</h3>
-            {network.anonymized && <EyeOff className="h-3.5 w-3.5 text-noc-muted" aria-label="Anonymisiert" />}
+            {network.anonymized && <EyeOff className="h-3.5 w-3.5 text-noc-muted" aria-label={t('common.anonymized')} />}
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-2">
             <VlanTag vlan={network.vlan} />
@@ -123,7 +128,7 @@ export function NetworkCard({ network, onOpen, accent, groupName }: { network: N
   );
 }
 
-/** Kacheln für Netzwerke und VLAN-Gruppen in der Reihenfolge aus dem Admin-Bereich. */
+/** Tiles for networks and VLAN groups in the order from the admin area. */
 export function networkTiles({
   groups,
   networks,
@@ -133,12 +138,14 @@ export function networkTiles({
   groups: GroupView[];
   networks: Record<string, NetworkView>;
   ungrouped: string[];
-  onOpen: (t: DetailTarget) => void;
+  onOpen: (target: DetailTarget) => void;
+  /** Reserved for translated tile titles; network/group names are user data. */
+  t?: TFunction;
 }): TileDef[] {
   const tiles: TileDef[] = [];
   for (const g of groups) {
     if (g.displayMode === 'expanded') {
-      // Aufgeklappte Gruppe: jedes Netzwerk als eigene Kachel
+      // Expanded group: every network as a tile of its own
       for (const id of g.networkIds) {
         const n = networks[id];
         if (!n) continue;

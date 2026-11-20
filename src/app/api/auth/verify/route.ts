@@ -10,27 +10,29 @@ import {
 } from '@/lib/auth';
 import { findUserForLogin, getSettings, touchUserLogin } from '@/lib/db';
 import { getAuthConfig } from '@/lib/env';
+import { LOCALE_COOKIE } from '@/lib/i18n/config';
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from '@/lib/session';
+import { apiError, localeCookieOptions } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Zugangs-Gate: Cloudflare Turnstile (optional) und anschließend entweder
- *  - Benutzerkonto (Benutzername + Passwort) → Rolle "user" bzw. "admin", oder
- *  - gemeinsamer Zugang über ACCESS_PASSWORD (optional) → Rolle "viewer" (Gesamtansicht).
+ * Access gate: Cloudflare Turnstile (optional), then either
+ *  - user account (username + password) → role "user" or "admin", or
+ *  - shared access via ACCESS_PASSWORD (optional) → role "viewer" (full overview).
  */
 export async function POST(req: Request) {
   const ip = await getClientIp();
   const rlKey = `gate:${ip || 'unknown'}`;
   if (rateLimited(rlKey)) {
-    return NextResponse.json({ error: 'Zu viele Versuche. Bitte später erneut versuchen.' }, { status: 429 });
+    return apiError('api.tooManyAttempts', 429);
   }
 
   let body: { username?: unknown; password?: unknown; token?: unknown; 'cf-turnstile-response'?: unknown } = {};
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Ungültige Anfrage' }, { status: 400 });
+    return apiError('api.badRequest', 400);
   }
 
   const cfg = getAuthConfig();
@@ -38,23 +40,24 @@ export async function POST(req: Request) {
     const raw = body.token ?? body['cf-turnstile-response'];
     const token = typeof raw === 'string' ? raw : '';
     if (!(await verifyTurnstile(token, ip))) {
-      return NextResponse.json({ error: 'Bot-Prüfung fehlgeschlagen. Bitte erneut versuchen.' }, { status: 403 });
+      return apiError('api.botCheckFailed', 403);
     }
   }
 
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   const pw = typeof body.password === 'string' ? body.password : '';
 
-  // --- Benutzerkonto ---------------------------------------------------------
+  // --- User account -----------------------------------------------------------
   if (username) {
     const found = username.length <= 64 ? findUserForLogin(username) : null;
     const ok = await verifyPassword(pw, found?.passwordHash ?? (await getDummyHash()));
     if (!found || !ok || found.user.disabled) {
-      return NextResponse.json({ error: 'Benutzername oder Passwort falsch' }, { status: 401 });
+      return apiError('api.wrongCredentials', 401);
     }
     clearRateLimit(rlKey);
     touchUserLogin(found.user.id);
     const res = NextResponse.json({ ok: true, role: found.user.isAdmin ? 'admin' : 'user' });
+    if (found.user.language) res.cookies.set(LOCALE_COOKIE, found.user.language, localeCookieOptions());
     res.cookies.set(
       SESSION_COOKIE,
       await createSessionToken(found.user.isAdmin ? 'admin' : 'user', found.user),
@@ -63,15 +66,15 @@ export async function POST(req: Request) {
     return res;
   }
 
-  // --- Gemeinsamer Zugang ----------------------------------------------------
+  // --- Shared access ----------------------------------------------------------
   if (!getSettings().allowSharedAccess) {
-    return NextResponse.json({ error: 'Bitte mit Benutzername und Passwort anmelden' }, { status: 401 });
+    return apiError('api.accountLoginRequired', 401);
   }
   if (!cfg.accessPassword && !cfg.turnstileEnabled) {
-    console.warn('[auth] Weder ACCESS_PASSWORD noch TURNSTILE_ENABLED gesetzt – Gate ist offen.');
+    console.warn('[auth] Neither ACCESS_PASSWORD nor TURNSTILE_ENABLED is set – the gate is open.');
   }
   if (cfg.accessPassword && !safeEqual(pw, cfg.accessPassword)) {
-    return NextResponse.json({ error: 'Falsches Zugangspasswort' }, { status: 401 });
+    return apiError('api.wrongAccessPassword', 401);
   }
 
   clearRateLimit(rlKey);

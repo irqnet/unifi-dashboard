@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, EyeOff, Plus, Radio, Router, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 import type { AdminDevice } from '@/lib/views';
 import { ReorderButton } from './NetworksSection';
 import {
@@ -58,6 +59,7 @@ function Editor({
   onDelete?: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ function Editor({
   const shown = devices.filter((d) => !q || [d.name, d.model, d.mac, d.ip ?? ''].some((x) => x.toLowerCase().includes(q)));
 
   async function submit() {
-    if (!draft.name.trim()) return setError('Gib der Gruppe einen Namen.');
+    if (!draft.name.trim()) return setError(t('groupEditor.nameRequired'));
     setBusy(true);
     setError(null);
     const err = await onSave(draft);
@@ -79,25 +81,25 @@ function Editor({
   }
 
   return (
-    <Sheet title={isNew ? 'Neue Geräte-Gruppe' : 'Geräte-Gruppe bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+    <Sheet title={isNew ? t('devices.new') : t('devices.edit')} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
       <Group>
-        <FieldRow label="Name" htmlFor="dg-name">
-          <TextInput id="dg-name" value={draft.name} maxLength={80} onChange={(e) => set('name', e.target.value)} placeholder="z. B. Rack Keller" />
+        <FieldRow label={t('common.name')} htmlFor="dg-name">
+          <TextInput id="dg-name" value={draft.name} maxLength={80} onChange={(e) => set('name', e.target.value)} placeholder={t('devices.namePlaceholder')} />
         </FieldRow>
-        <FieldRow label="Beschreibung" htmlFor="dg-desc">
-          <TextInput id="dg-desc" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} placeholder="Optional" />
+        <FieldRow label={t('common.description')} htmlFor="dg-desc">
+          <TextInput id="dg-desc" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} placeholder={t('common.optional')} />
         </FieldRow>
-        <FieldRow label="Farbe">
+        <FieldRow label={t('common.color')}>
           <ColorPicker value={draft.color} onChange={(c) => set('color', c)} />
         </FieldRow>
       </Group>
 
-      <Group title="Geräte" aside={`${draft.deviceMacs.length} ausgewählt`}>
+      <Group title={t('admin.nav.devices')} aside={t('admin.selected', { count: draft.deviceMacs.length })}>
         <div className="flex items-center gap-2 px-3.5 py-2">
           <Search className="h-4 w-4 shrink-0 text-noc-muted" />
-          <TextInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Name, Modell, MAC oder IP suchen" aria-label="Geräte filtern" />
+          <TextInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('devices.searchPlaceholder')} aria-label={t('devices.filter')} />
         </div>
-        {shown.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">Keine passenden Geräte.</p>}
+        {shown.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">{t('devices.noMatch')}</p>}
         {shown.map((d) => {
           const checked = draft.deviceMacs.includes(d.mac);
           const other = d.groupId !== null && d.groupId !== initial.id ? groups.find((g) => g.id === d.groupId)?.name : undefined;
@@ -110,10 +112,10 @@ function Editor({
               title={
                 <>
                   {d.name}
-                  {!d.online && <span className="ml-1.5 text-[11px] text-rose-300">offline</span>}
+                  {!d.online && <span className="ml-1.5 text-[11px] text-rose-300">{t('common.offlineLower')}</span>}
                 </>
               }
-              subtitle={other ? (checked ? `Wird aus „${other}“ verschoben` : `Derzeit in „${other}“`) : d.model}
+              subtitle={other ? (checked ? t('admin.movedFrom', { name: other }) : t('admin.currentlyIn', { name: other })) : d.model}
               detail={d.ip ?? undefined}
             />
           );
@@ -121,17 +123,17 @@ function Editor({
       </Group>
 
       <Group>
-        <SwitchRow title="Auf dem Dashboard anzeigen" checked={!draft.hidden} onChange={(v) => set('hidden', !v)} />
+        <SwitchRow title={t('admin.showOnDashboard')} checked={!draft.hidden} onChange={(v) => set('hidden', !v)} />
       </Group>
 
       {!isNew && onDelete && (
         <DeleteRow
-          label="Geräte-Gruppe löschen"
+          label={t('devices.delete')}
           confirming={confirmDelete}
           onAsk={() => setConfirmDelete(true)}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void onDelete()}
-          hint="Die Geräte bleiben erhalten und erscheinen danach ohne Gruppe."
+          hint={t('devices.deleteHint')}
         />
       )}
     </Sheet>
@@ -155,6 +157,7 @@ export function DeviceGroups({
   onError: (e: string | null) => void;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [devices, setDevices] = useState<AdminDevice[]>([]);
   const [groups, setGroups] = useState<AdminDeviceGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,24 +223,24 @@ export function DeviceGroups({
   return (
     <>
       <PageHeader
-        title="Geräte"
-        lead="Ordne Switche und Access Points nach Ort oder Zweck, zum Beispiel „Rack Keller“ oder „Obergeschoss“."
+        title={t('admin.nav.devices')}
+        lead={t('devices.lead')}
         action={
           <PrimaryButton onClick={() => setEditing('new')}>
-            <Plus className="h-4 w-4" /> Gruppe
+            <Plus className="h-4 w-4" /> {t('networks.group')}
           </PrimaryButton>
         }
       />
 
       <Group
-        title="Gruppen"
-        aside={groups.length > 1 && <LinkButton onClick={() => setReorder((r) => !r)}>{reorder ? 'Fertig' : 'Reihenfolge ändern'}</LinkButton>}
-        footer={groups.length > 0 ? 'In dieser Reihenfolge erscheinen die Gruppen auf der Hardware-Seite.' : undefined}
+        title={t('networks.groups')}
+        aside={groups.length > 1 && <LinkButton onClick={() => setReorder((r) => !r)}>{reorder ? t('common.done') : t('admin.reorder')}</LinkButton>}
+        footer={groups.length > 0 ? t('devices.orderHint') : undefined}
       >
         {loading && !groups.length && <LoadingRow />}
         {!loading && !groups.length && (
-          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Erste Gruppe anlegen</LinkButton>}>
-            Noch keine Geräte-Gruppen. Ohne Gruppe erscheinen alle Geräte unter „Switche“ und „Access Points“.
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>{t('networks.createFirst')}</LinkButton>}>
+            {t('devices.emptyHint')}
           </EmptyRow>
         )}
         {groups.map((g, idx) => {
@@ -248,7 +251,7 @@ export function DeviceGroups({
               key={g.id}
               icon={<ColorDot color={g.color} />}
               title={g.name}
-              subtitle={names.length ? names.join(', ') : 'Keine Geräte zugeordnet'}
+              subtitle={names.length ? names.join(', ') : t('devices.noneAssigned')}
               onClick={reorder ? undefined : () => setEditing(g.id)}
               chevron={!reorder}
               dim={g.hidden}
@@ -256,9 +259,9 @@ export function DeviceGroups({
                 !reorder && (
                   <>
                     {offline > 0 && <Pill tone="danger">{offline} offline</Pill>}
-                    {g.hidden && <Pill icon={<EyeOff className="h-3 w-3" />}>ausgeblendet</Pill>}
+                    {g.hidden && <Pill icon={<EyeOff className="h-3 w-3" />}>{t('admin.hidden')}</Pill>}
                     <span className="hidden sm:inline">
-                      {g.deviceMacs.length} {g.deviceMacs.length === 1 ? 'Gerät' : 'Geräte'}
+                      {t('devices.count', { count: g.deviceMacs.length })}
                     </span>
                   </>
                 )
@@ -266,10 +269,10 @@ export function DeviceGroups({
             >
               {reorder && (
                 <div className="flex gap-1">
-                  <ReorderButton label="Nach oben" disabled={idx === 0} onClick={() => void move(idx, -1)}>
+                  <ReorderButton label={t('admin.moveUp')} disabled={idx === 0} onClick={() => void move(idx, -1)}>
                     <ArrowUp className="h-4 w-4" />
                   </ReorderButton>
-                  <ReorderButton label="Nach unten" disabled={idx === groups.length - 1} onClick={() => void move(idx, 1)}>
+                  <ReorderButton label={t('admin.moveDown')} disabled={idx === groups.length - 1} onClick={() => void move(idx, 1)}>
                     <ArrowDown className="h-4 w-4" />
                   </ReorderButton>
                 </div>
@@ -280,7 +283,7 @@ export function DeviceGroups({
       </Group>
 
       {ungrouped.length > 0 && (
-        <Group title="Ohne Gruppe" aside={`${ungrouped.length} ${ungrouped.length === 1 ? 'Gerät' : 'Geräte'}`}>
+        <Group title={t('devices.ungrouped')} aside={t('devices.count', { count: ungrouped.length })}>
           {ungrouped.map((d) => (
             <Row
               key={d.mac}
@@ -293,7 +296,7 @@ export function DeviceGroups({
               subtitle={d.model}
               detail={
                 <>
-                  {!d.online && <Pill tone="danger">offline</Pill>}
+                  {!d.online && <Pill tone="danger">{t('common.offlineLower')}</Pill>}
                   <span className="hidden font-mono text-[12px] sm:inline">{d.ip ?? ''}</span>
                 </>
               }
@@ -302,8 +305,8 @@ export function DeviceGroups({
         </Group>
       )}
 
-      <Group footer="Ausgeschaltet erscheinen auf der Hardware-Seite nur Geräte, die einer Gruppe angehören.">
-        <SwitchRow title="Geräte ohne Gruppe anzeigen" subtitle="Unter „Switche“ und „Access Points“." checked={showUngrouped} onChange={onShowUngrouped} />
+      <Group footer={t('devices.ungroupedFooter')}>
+        <SwitchRow title={t('devices.showUngrouped')} subtitle={t('devices.showUngroupedHint')} checked={showUngrouped} onChange={onShowUngrouped} />
       </Group>
 
       {editing === 'new' && <Editor isNew initial={EMPTY} devices={devices} groups={groups} onSave={(d) => save('new', d)} onCancel={() => setEditing(null)} />}

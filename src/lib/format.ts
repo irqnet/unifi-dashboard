@@ -10,7 +10,7 @@ export function formatBps(bps: number | null | undefined, digits = 1): string {
   return `${v.toFixed(i === 0 ? 0 : v >= 100 ? 0 : digits)} ${units[i]}`;
 }
 
-/** Kurzform für Chart-Achsen */
+/** Short form for chart axes */
 export function formatBpsShort(bps: number): string {
   if (bps >= 1e9) return `${(bps / 1e9).toFixed(1)}G`;
   if (bps >= 1e6) return `${(bps / 1e6).toFixed(bps >= 1e8 ? 0 : 1)}M`;
@@ -33,11 +33,13 @@ export function formatUptime(seconds: number | null | undefined): string {
   return `${m}m`;
 }
 
-export function formatTime(ts: number | null | undefined): string {
+/** `tag` is a BCP 47 locale tag (see LOCALE_TAGS); en-GB keeps the 24-hour clock. */
+export function formatTime(ts: number | null | undefined, tag: string): string {
   if (!ts) return '–';
-  return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(ts).toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+/** Port link speed; 0 = no link (shown as "Offline" in both languages). */
 export function formatSpeed(mbit: number): string {
   if (!mbit) return 'Offline';
   if (mbit >= 1000) return `${mbit % 1000 === 0 ? mbit / 1000 : (mbit / 1000).toFixed(1)}G`;

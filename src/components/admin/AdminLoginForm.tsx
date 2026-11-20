@@ -2,8 +2,10 @@
 
 import { Loader2, Lock } from 'lucide-react';
 import { useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 
 export function AdminLoginForm() {
+  const t = useT();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -19,15 +21,15 @@ export function AdminLoginForm() {
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        // Bei per Rewrite angezeigtem Login (z. B. /vouchers) auf die ursprünglich angefragte Seite zurück
+        // Login shown via rewrite (e.g. /vouchers): return to the originally requested page
         const { pathname, search } = window.location;
         window.location.assign(pathname === '/admin/login' ? '/admin' : pathname + search);
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Anmeldung fehlgeschlagen');
+      setError(data.error ?? t('adminLogin.failed'));
     } catch {
-      setError('Netzwerkfehler – bitte erneut versuchen');
+      setError(t('common.networkError'));
     } finally {
       setBusy(false);
     }
@@ -37,7 +39,7 @@ export function AdminLoginForm() {
     <form onSubmit={submit} className="space-y-4">
       <div>
         <label htmlFor="admin-password" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-noc-muted">
-          Admin-Passwort
+          {t('adminLogin.password')}
         </label>
         <input
           id="admin-password"
@@ -56,7 +58,7 @@ export function AdminLoginForm() {
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-40"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-        Als Admin anmelden
+        {t('adminLogin.submit')}
       </button>
     </form>
   );

@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { ArrowUpToLine, Zap } from 'lucide-react';
+import { useT } from '@/components/i18n/I18nProvider';
 import { formatBps, formatSpeed } from '@/lib/format';
 import type { PortView } from '@/lib/views';
 
@@ -25,6 +26,7 @@ function portClass(p: PortView): string {
 }
 
 function PortCell({ p, alignRight }: { p: PortView; alignRight: boolean }) {
+  const t = useT();
   const sfp = p.media?.toUpperCase().includes('SFP');
   return (
     <div className="group relative">
@@ -52,24 +54,24 @@ function PortCell({ p, alignRight }: { p: PortView; alignRight: boolean }) {
           {p.name} <span className="font-normal text-noc-muted">#{p.idx}</span>
         </div>
         <dl className="grid grid-cols-[auto,1fr] gap-x-2 gap-y-0.5 text-noc-muted">
-          <dt>Status</dt>
-          <dd className="text-right text-noc-text">{!p.enabled ? 'Deaktiviert' : p.up ? formatSpeed(p.speed) : 'Offline'}</dd>
+          <dt>{t('port.status')}</dt>
+          <dd className="text-right text-noc-text">{!p.enabled ? t('port.disabled') : p.up ? formatSpeed(p.speed) : t('status.offline')}</dd>
           {p.media && (
             <>
-              <dt>Medium</dt>
+              <dt>{t('port.media')}</dt>
               <dd className="text-right text-noc-text">{p.media}</dd>
             </>
           )}
           {p.uplink && (
             <>
-              <dt>Rolle</dt>
+              <dt>{t('port.role')}</dt>
               <dd className="text-right text-sky-300">Uplink</dd>
             </>
           )}
           {p.poeCapable && (
             <>
               <dt>PoE</dt>
-              <dd className="text-right text-noc-text">{p.poe ? `${p.poePower.toFixed(1)} W` : 'aus'}</dd>
+              <dd className="text-right text-noc-text">{p.poe ? `${p.poePower.toFixed(1)} W` : t('common.off')}</dd>
             </>
           )}
           {p.up && (
@@ -87,10 +89,11 @@ function PortCell({ p, alignRight }: { p: PortView; alignRight: boolean }) {
 }
 
 export function PortMatrix({ ports }: { ports: PortView[] }) {
-  if (!ports.length) return <p className="text-xs text-noc-muted">Keine Port-Informationen.</p>;
+  const t = useT();
+  if (!ports.length) return <p className="text-xs text-noc-muted">{t('port.none')}</p>;
   const copper = ports.filter((p) => !p.media?.toUpperCase().includes('SFP'));
   const sfp = ports.filter((p) => p.media?.toUpperCase().includes('SFP'));
-  // Zwei Reihen wie am Gerät: ungerade oben, gerade unten
+  // Two rows like on the device: odd on top, even below
   const twoRows = copper.length > 8;
   const top = twoRows ? copper.filter((_, i) => i % 2 === 0) : copper;
   const bottom = twoRows ? copper.filter((_, i) => i % 2 === 1) : [];

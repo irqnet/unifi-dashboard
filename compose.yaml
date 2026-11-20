@@ -1,5 +1,5 @@
-# Podman-Compose: lokaler Build & Betrieb (kein Registry-Pull)
-#   podman-compose up -d --build     bzw.   podman compose up -d --build
+# Podman Compose: local build & operation (no registry pull)
+#   podman-compose up -d --build     or   podman compose up -d --build
 name: unifi-dashboard
 
 services:
@@ -10,8 +10,8 @@ services:
     image: localhost/unifi-dashboard:latest
     container_name: unifi-dashboard
     restart: unless-stopped
-    # Optional: .env neben compose.yaml. Stack-Manager (Portainer, Dockge, Komodo …), die
-    # Variablen nur für die Interpolation setzen, funktionieren über den environment-Block.
+    # Optional: .env next to compose.yaml. Stack managers (Portainer, Dockge, Komodo …) that
+    # only set variables for interpolation work through the environment block.
     env_file:
       - path: .env
         required: false
@@ -32,7 +32,7 @@ services:
       HISTORY_MINUTES: ${HISTORY_MINUTES:-30}
       WAN_BANDWIDTH_DOWN_MBPS: ${WAN_BANDWIDTH_DOWN_MBPS:-}
       WAN_BANDWIDTH_UP_MBPS: ${WAN_BANDWIDTH_UP_MBPS:-}
-      VOUCHER_PRESETS: ${VOUCHER_PRESETS:-Tagespass=1440,1,,,;Wochenende=4320,1,,,;Woche (3 Geräte)=10080,3,,,}
+      VOUCHER_PRESETS: ${VOUCHER_PRESETS:-1440,1,,,;4320,1,,,;10080,3,,,}
       VOUCHER_WIFI_SSID: ${VOUCHER_WIFI_SSID:-}
       VOUCHER_WIFI_PASSWORD: ${VOUCHER_WIFI_PASSWORD:-}
       VOUCHER_NOTE_REQUIRED: ${VOUCHER_NOTE_REQUIRED:-false}
@@ -47,16 +47,16 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       HIDE_SENSITIVE_IPS: ${HIDE_SENSITIVE_IPS:-true}
     ports:
-      # extern 3004 → intern 3000
+      # external 3004 → internal 3000
       - "${HOST_PORT:-3004}:3000"
     volumes:
-      # :Z = privates SELinux-Label, damit der Container schreiben darf.
-      # DATA_PATH=unifi-dashboard-data nutzt stattdessen das benannte Volume unten
-      # (wird automatisch mit den richtigen Rechten für UID 1000 angelegt).
+      # :Z = private SELinux label so the container may write.
+      # DATA_PATH=unifi-dashboard-data uses the named volume below instead
+      # (created automatically with the right permissions for UID 1000).
       - ${DATA_PATH:-./data}:/app/data:Z
-    # Rootless Podman: USERNS_MODE=keep-id:uid=1000,gid=1000 setzen, damit der Host-User
-    # im Container UID 1000 (node) ist und ./data ohne chown beschreibbar ist (Podman >= 4.3).
-    # Leer (Standard) = normales Verhalten, kompatibel mit Docker.
+    # Rootless Podman: set USERNS_MODE=keep-id:uid=1000,gid=1000 so the host user is
+    # UID 1000 (node) in the container and ./data is writable without chown (Podman >= 4.3).
+    # Empty (default) = normal behaviour, compatible with Docker.
     userns_mode: ${USERNS_MODE:-}
     user: "1000:1000"
     read_only: true
@@ -67,7 +67,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # Beispiel: Controller per Hostname erreichbar machen (UNIFI_CONTROLLER_URL=https://unifi.local)
+    # Example: reach the controller by host name (UNIFI_CONTROLLER_URL=https://unifi.local)
     extra_hosts:
       - "unifi.local:host-gateway"
     healthcheck:

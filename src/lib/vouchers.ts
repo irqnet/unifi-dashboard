@@ -1,11 +1,13 @@
 /**
- * Gäste-WLAN-Voucher (UniFi Hotspot): Vorlagen, Erstellen, Auflisten, Widerrufen.
- * Funktional angelehnt an glenndehaan/unifi-voucher-site (MIT), hier nativ über die
- * klassische Network-API (cmd/hotspot, stat/voucher, stat/guest) neu implementiert.
+ * Guest Wi-Fi vouchers (UniFi hotspot): presets, create, list, revoke.
+ * Functionally modelled on glenndehaan/unifi-voucher-site (MIT), re-implemented
+ * natively on the classic Network API (cmd/hotspot, stat/voucher, stat/guest).
  */
 import 'server-only';
 import { randomInt, randomUUID } from 'node:crypto';
 import { getConfig } from './env';
+import type { TFunction } from './i18n/translate';
+import { describeSpec, type VoucherSpec } from './voucherFormat';
 import { UniFiClient } from './unifi/client';
 import type { RawGuest, RawVoucher } from './unifi/types';
 
@@ -13,20 +15,14 @@ export interface VoucherPreset {
   id: string;
   label: string;
   minutes: number;
-  /** 0 = unbegrenzt, 1 = einmalig, n = n Geräte */
+  /** 0 = unlimited, 1 = single use, n = n devices */
   quota: number;
   up: number | null;
   down: number | null;
   megabytes: number | null;
 }
 
-export interface VoucherSpec {
-  minutes: number;
-  quota: number;
-  up: number | null;
-  down: number | null;
-  megabytes: number | null;
-}
+export type { VoucherSpec };
 
 export type VoucherState = 'unused' | 'active' | 'expired';
 
@@ -39,7 +35,7 @@ export interface VoucherView {
   used: number;
   note: string;
   state: VoucherState;
-  /** Ablauf (ms) – erst nach der ersten Nutzung bekannt */
+  /** Expiry (ms) – only known after first use */
   expiresAt: number | null;
   up: number | null;
   down: number | null;
@@ -56,36 +52,19 @@ export interface VoucherListPayload {
   noteRequired: boolean;
   maxBatch: number;
   mock: boolean;
-  /** Fehler beim Laden der Gast-Sitzungen (Liste bleibt trotzdem nutzbar) */
+  /** Error loading guest sessions (the list remains usable) */
   guestError: string | null;
 }
 
-// --- Vorlagen ----------------------------------------------------------------
+// --- Presets ------------------------------------------------------------------
 
 function num(v: string | undefined): number | null {
   const n = Number.parseInt((v ?? '').trim(), 10);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export function describeSpec(s: VoucherSpec): string {
-  const parts = [formatDuration(s.minutes), s.quota === 0 ? 'unbegrenzt nutzbar' : s.quota === 1 ? 'einmalig' : `${s.quota} Geräte`];
-  if (s.down || s.up) parts.push(`↓ ${s.down ? formatKbps(s.down) : '∞'} / ↑ ${s.up ? formatKbps(s.up) : '∞'}`);
-  if (s.megabytes) parts.push(s.megabytes >= 1024 ? `${(s.megabytes / 1024).toFixed(s.megabytes % 1024 ? 1 : 0)} GB` : `${s.megabytes} MB`);
-  return parts.join(' · ');
-}
-
-export function formatDuration(minutes: number): string {
-  if (minutes % 1440 === 0) return minutes === 1440 ? '1 Tag' : `${minutes / 1440} Tage`;
-  if (minutes % 60 === 0) return minutes === 60 ? '1 Stunde' : `${minutes / 60} Stunden`;
-  return `${minutes} Minuten`;
-}
-
-function formatKbps(kbps: number): string {
-  return kbps >= 1000 ? `${+(kbps / 1000).toFixed(1)} Mbit/s` : `${kbps} kbit/s`;
-}
-
-/** Parst VOUCHER_PRESETS ("Name=Minuten,Nutzungen,Up,Down,MB;…", kompatibel zu VOUCHER_TYPES). */
-export function parsePresets(raw: string): VoucherPreset[] {
+/** Parses VOUCHER_PRESETS ("Name=minutes,uses,up,down,MB;…", compatible with VOUCHER_TYPES). */
+export function parsePresets(raw: string, t: TFunction): VoucherPreset[] {
   const out: VoucherPreset[] = [];
   for (const entry of raw.split(';')) {
     const trimmed = entry.trim();
@@ -95,7 +74,7 @@ export function parsePresets(raw: string): VoucherPreset[] {
     const [m, q, up, down, mb] = (eq > 0 ? trimmed.slice(eq + 1) : trimmed).split(',');
     const minutes = num(m);
     if (!minutes) {
-      console.warn(`[vouchers] Ungültige Vorlage in VOUCHER_PRESETS ignoriert: "${trimmed}"`);
+      console.warn(`[vouchers] Ignoring invalid preset in VOUCHER_PRESETS: "${trimmed}"`);
       continue;
     }
     const quotaN = Number.parseInt((q ?? '').trim(), 10);
@@ -106,36 +85,36 @@ export function parsePresets(raw: string): VoucherPreset[] {
       down: num(down),
       megabytes: num(mb),
     };
-    out.push({ id: `p${out.length}`, label: label || describeSpec(spec), ...spec });
+    out.push({ id: `p${out.length}`, label: label || describeSpec(spec, t), ...spec });
   }
   return out;
 }
 
-export function getPresets(): VoucherPreset[] {
-  return parsePresets(getConfig().vouchers.presets);
+export function getPresets(t: TFunction): VoucherPreset[] {
+  return parsePresets(getConfig().vouchers.presets, t);
 }
 
-/** Validiert eine frei konfigurierte Voucher-Spezifikation. */
-export function parseSpec(body: Record<string, unknown>): { value: VoucherSpec } | { error: string } {
+/** Validates a custom voucher specification. */
+export function parseSpec(body: Record<string, unknown>, t: TFunction): { value: VoucherSpec } | { error: string } {
   const int = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN);
   const minutes = int(body.minutes);
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525_600) return { error: 'Gültigkeit muss zwischen 1 Minute und 1 Jahr liegen' };
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525_600) return { error: t('voucher.error.duration') };
   const quota = int(body.quota);
-  if (!Number.isInteger(quota) || quota < 0 || quota > 10_000) return { error: 'Ungültige Anzahl Nutzungen' };
+  if (!Number.isInteger(quota) || quota < 0 || quota > 10_000) return { error: t('voucher.error.quota') };
   const opt = (v: unknown, max: number, label: string): number | null | string => {
     if (v === null || v === undefined || v === '' || v === 0) return null;
     const n = int(v);
-    if (!Number.isInteger(n) || n < 1 || n > max) return `${label} ist ungültig`;
+    if (!Number.isInteger(n) || n < 1 || n > max) return t('voucher.error.invalidField', { field: label });
     return n;
   };
-  const up = opt(body.up, 10_000_000, 'Upload-Limit');
-  const down = opt(body.down, 10_000_000, 'Download-Limit');
-  const megabytes = opt(body.megabytes, 10_000_000, 'Datenlimit');
+  const up = opt(body.up, 10_000_000, t('voucher.field.upLimit'));
+  const down = opt(body.down, 10_000_000, t('voucher.field.downLimit'));
+  const megabytes = opt(body.megabytes, 10_000_000, t('voucher.field.dataLimit'));
   for (const v of [up, down, megabytes]) if (typeof v === 'string') return { error: v };
   return { value: { minutes, quota, up: up as number | null, down: down as number | null, megabytes: megabytes as number | null } };
 }
 
-// --- Normalisierung ----------------------------------------------------------
+// --- Normalisation ----------------------------------------------------------
 
 export function formatCode(code: string): string {
   return /^\d{10}$/.test(code) ? `${code.slice(0, 5)}-${code.slice(5)}` : code;
@@ -170,7 +149,7 @@ function toView(v: RawVoucher, guests: RawGuest[], now: number): VoucherView {
   };
 }
 
-// --- Mock-Speicher (UNIFI_MOCK=true) -----------------------------------------
+// --- Mock store (UNIFI_MOCK=true) -----------------------------------------
 
 const g = globalThis as unknown as { __udMockVouchers?: Map<string, RawVoucher[]>; __udVoucherClient?: UniFiClient };
 
@@ -191,9 +170,9 @@ function mockStore(site: string): RawVoucher[] {
       ...extra,
     });
     list = [
-      mk(600, 1440, 1, 0, 'Besuch Familie Meier'),
-      mk(3600 * 5, 1440, 1, 1, 'Handwerker Heizung', { start_time: now - 3600 * 4, end_time: now + 3600 * 20 }),
-      mk(3600 * 30, 10080, 3, 2, 'Ferienwohnung OG', { start_time: now - 3600 * 29, end_time: now + 3600 * 24 * 5, qos_rate_max_down: 50000, qos_rate_max_up: 10000 }),
+      mk(600, 1440, 1, 0, 'Visit: the Millers'),
+      mk(3600 * 5, 1440, 1, 1, 'Heating engineer', { start_time: now - 3600 * 4, end_time: now + 3600 * 20 }),
+      mk(3600 * 30, 10080, 3, 2, 'Holiday flat upstairs', { start_time: now - 3600 * 29, end_time: now + 3600 * 24 * 5, qos_rate_max_down: 50000, qos_rate_max_up: 10000 }),
       mk(3600 * 50, 480, 0, 4, 'Workshop', { start_time: now - 3600 * 49, end_time: now - 3600 * 41 }),
       mk(3600 * 2, 4320, 1, 0, '', { qos_usage_quota: 5120 }),
     ];
@@ -204,7 +183,7 @@ function mockStore(site: string): RawVoucher[] {
 
 function mockGuests(site: string): RawGuest[] {
   const out: RawGuest[] = [];
-  const names = ['iphone-gast', 'pixel-gast', 'laptop-gast', 'ipad-gast'];
+  const names = ['iphone-guest', 'pixel-guest', 'laptop-guest', 'ipad-guest'];
   for (const v of mockStore(site)) {
     for (let i = 0; i < Math.min(v.used ?? 0, 3); i++) {
       out.push({
@@ -225,9 +204,9 @@ function api(): UniFiClient {
   return g.__udVoucherClient;
 }
 
-// --- Öffentliche Funktionen --------------------------------------------------
+// --- Public functions --------------------------------------------------
 
-export async function listVouchers(site: string): Promise<VoucherListPayload> {
+export async function listVouchers(site: string, t: TFunction): Promise<VoucherListPayload> {
   const cfg = getConfig();
   const now = Date.now();
   let raw: RawVoucher[];
@@ -247,7 +226,7 @@ export async function listVouchers(site: string): Promise<VoucherListPayload> {
   return {
     site,
     vouchers,
-    presets: getPresets(),
+    presets: getPresets(t),
     wifi: { ssid: cfg.vouchers.ssid, hasPassword: !!cfg.vouchers.wifiPassword },
     noteRequired: cfg.vouchers.noteRequired,
     maxBatch: cfg.vouchers.maxBatch,
@@ -256,7 +235,7 @@ export async function listVouchers(site: string): Promise<VoucherListPayload> {
   };
 }
 
-/** Erstellt `count` Voucher und gibt die neu erzeugten zurück. */
+/** Creates `count` vouchers and returns the newly created ones. */
 export async function createVouchers(site: string, spec: VoucherSpec, count: number, note: string): Promise<VoucherView[]> {
   const cfg = getConfig();
   const now = Date.now();
@@ -315,7 +294,7 @@ export async function deleteVouchers(site: string, ids: string[]): Promise<{ del
   return { deleted: results.length - errors.length, errors: Array.from(new Set(errors)) };
 }
 
-/** WLAN-Infos für Ausdruck/QR-Code (Passwort nur für Admins, die drucken). */
+/** Wi-Fi details for the printout/QR code (password only for admins who print). */
 export function wifiInfo() {
   const { ssid, wifiPassword } = getConfig().vouchers;
   return { ssid, password: wifiPassword };

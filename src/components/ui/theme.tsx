@@ -3,6 +3,8 @@
 import clsx from 'clsx';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
+import type { MessageKey } from '@/lib/i18n/translate';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 
@@ -10,8 +12,8 @@ const KEY = 'ud.theme';
 const EVENT = 'ud-theme';
 
 /**
- * Wird als Inline-Skript im <head> ausgeführt, bevor die Seite gezeichnet wird
- * (kein Aufflackern). Muss eigenständig sein – keine Imports.
+ * Runs as an inline script in <head> before the page is painted
+ * (no flicker). Must be self-contained – no imports.
  */
 export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem('${KEY}');var m=window.matchMedia('(prefers-color-scheme: dark)');function a(){var d=p==='dark'||(p!=='light'&&m.matches);var c=document.documentElement.classList;c.toggle('dark',d);c.toggle('light',!d);}a();m.addEventListener('change',function(){p=localStorage.getItem('${KEY}');a();});}catch(e){}})();`;
 
@@ -58,18 +60,21 @@ export function useThemePref(): [ThemePref, (p: ThemePref) => void] {
   return [pref, set];
 }
 
-const OPTIONS: { value: ThemePref; label: string; icon: typeof Sun }[] = [
-  { value: 'system', label: 'System', icon: Monitor },
-  { value: 'light', label: 'Hell', icon: Sun },
-  { value: 'dark', label: 'Dunkel', icon: Moon },
+const OPTIONS: { value: ThemePref; label: MessageKey; icon: typeof Sun }[] = [
+  { value: 'system', label: 'theme.system', icon: Monitor },
+  { value: 'light', label: 'theme.light', icon: Sun },
+  { value: 'dark', label: 'theme.dark', icon: Moon },
 ];
 
-/** Segment-Umschalter System/Hell/Dunkel. `labels` zeigt die Beschriftung neben den Symbolen. */
+/** Segmented System/Light/Dark switch. `labels` shows the caption next to the icons. */
 export function ThemeSwitcher({ className, labels = false }: { className?: string; labels?: boolean }) {
+  const t = useT();
   const [pref, setPref] = useThemePref();
   return (
-    <div className={clsx('inline-flex rounded-lg border border-noc-line bg-noc-raised p-0.5', className)} role="radiogroup" aria-label="Darstellung">
-      {OPTIONS.map(({ value, label, icon: Icon }) => (
+    <div className={clsx('inline-flex rounded-lg border border-noc-line bg-noc-raised p-0.5', className)} role="radiogroup" aria-label={t('common.appearance')}>
+      {OPTIONS.map(({ value, label: key, icon: Icon }) => {
+        const label = t(key);
+        return (
         <button
           key={value}
           type="button"
@@ -86,7 +91,8 @@ export function ThemeSwitcher({ className, labels = false }: { className?: strin
           <Icon className="h-3.5 w-3.5" />
           {labels && <span>{label}</span>}
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -3,18 +3,19 @@ import { requireRole } from '@/lib/auth';
 import { listGroups, reorderGroups } from '@/lib/db';
 import { resolveSite } from '@/lib/site';
 import { readJson } from '@/lib/validate';
+import { apiError } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
-/** Reihenfolge der Gruppen auf dem Dashboard setzen: { site, ids: number[] } */
+/** Set the order of groups on the dashboard: { site, ids: number[] } */
 export async function PUT(req: Request) {
   const auth = await requireRole('admin');
   if ('error' in auth) return auth.error;
   const body = (await readJson(req)) as { site?: unknown; ids?: unknown } | null;
   const site = await resolveSite(typeof body?.site === 'string' ? body.site : null);
-  if (!site) return NextResponse.json({ error: 'Unbekannte Site' }, { status: 404 });
+  if (!site) return apiError('api.unknownSite', 404);
   if (!Array.isArray(body?.ids) || body!.ids.some((x) => !Number.isInteger(x))) {
-    return NextResponse.json({ error: 'Ungültige Reihenfolge' }, { status: 400 });
+    return apiError('api.badOrder', 400);
   }
   reorderGroups(site, body!.ids as number[]);
   return NextResponse.json({ groups: listGroups(site) });

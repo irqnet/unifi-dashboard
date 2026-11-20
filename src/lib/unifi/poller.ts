@@ -1,8 +1,8 @@
 /**
- * Hintergrund-Poller mit In-Memory-Ringpuffer.
- * Pollt alle konfigurierten Sites im Intervall POLLING_INTERVAL_MS und speichert pro Poll
- * ein kompaktes Sample (Traffic + Clients je Netzwerk, WAN-Durchsatz) für die letzten
- * HISTORY_MINUTES Minuten. Läuft als Singleton im Node-Prozess (globalThis).
+ * Background poller with an in-memory ring buffer.
+ * Polls all configured sites every POLLING_INTERVAL_MS and stores a compact sample per poll
+ * (traffic + clients per network, WAN throughput) for the last
+ * HISTORY_MINUTES minutes. Runs as a singleton in the Node process (globalThis).
  */
 import 'server-only';
 import { getConfig } from '../env';
@@ -10,14 +10,14 @@ import { UniFiClient } from './client';
 import { MOCK_SITES, mockSiteData } from './mock';
 import type { RawClient, RawNetwork, RawSite, SiteRawData } from './types';
 
-/** [down bps, up bps, clients gesamt, wired clients] */
+/** [down bps, up bps, total clients, wired clients] */
 export type NetSample = [number, number, number, number];
 
 export interface Sample {
   t: number;
   wanDown: number;
   wanUp: number;
-  /** Durchsatz je WAN-Anschluss (Schlüssel WAN, WAN2 …), sofern das Gateway ihn liefert */
+  /** Throughput per WAN connection (keys WAN, WAN2 …), if the gateway provides it */
   wans?: Record<string, [number, number]>;
   nets: Record<string, NetSample>;
 }
@@ -48,12 +48,12 @@ export class RingBuffer<T> {
 export interface SiteState {
   site: string;
   data: SiteRawData | null;
-  /** Zuordnung Client-MAC → Netzwerk-ID des letzten Polls */
+  /** Client MAC → network ID mapping of the last poll */
   clientNet: Map<string, string>;
   lastPoll: number | null;
   lastAttempt: number | null;
   error: string | null;
-  /** Fehler einzelner Endpunkte bei ansonsten erfolgreichem Poll */
+  /** Errors of individual endpoints during an otherwise successful poll */
   partialError: string | null;
   history: RingBuffer<Sample>;
   networksFetchedAt: number;
@@ -61,7 +61,7 @@ export interface SiteState {
 
 const NETWORK_CACHE_MS = 60_000;
 
-/** Rate eines Clients in bit/s aus Sicht des Clients (down = zum Client). */
+/** Rate of a client in bit/s from the client's perspective (down = towards the client). */
 export function clientRates(c: RawClient): { down: number; up: number } {
   const tx = c.is_wired ? c['wired-tx_bytes-r'] ?? c['tx_bytes-r'] : c['tx_bytes-r'];
   const rx = c.is_wired ? c['wired-rx_bytes-r'] ?? c['rx_bytes-r'] : c['rx_bytes-r'];
@@ -84,7 +84,7 @@ function inSubnet(ip: string, cidr: string): boolean {
   return (a & mask) === (b & mask);
 }
 
-/** Ordnet einen Client einem Netzwerk zu: network_id → Netzwerkname → Subnetz-Match. */
+/** Maps a client to a network: network_id → network name → subnet match. */
 export function resolveClientNetwork(c: RawClient, networks: RawNetwork[]): string {
   if (c.network_id && networks.some((n) => n._id === c.network_id)) return c.network_id;
   if (c.network) {
@@ -123,7 +123,7 @@ class Poller {
     try {
       all = await this.api().sites();
     } catch (err) {
-      console.warn('[unifi] Site-Liste nicht abrufbar:', (err as Error).message);
+      console.warn('[unifi] Cannot fetch site list:', (err as Error).message);
     }
     let sites: RawSite[];
     if (configured.includes('*')) {
@@ -164,8 +164,8 @@ class Poller {
       api.health(st.site),
       needNetworks ? api.networks(st.site) : Promise.resolve(st.data!.networks),
     ]);
-    // Einzelne fehlerhafte Endpunkte nicht den ganzen Poll kippen lassen:
-    // letzten bekannten Stand weiterverwenden, Fehler aber melden.
+    // Don't let individual failing endpoints break the whole poll:
+    // keep using the last known state, but report the error.
     const prev = st.data;
     const errors: string[] = [];
     const pick = <T>(r: PromiseSettledResult<T>, fallback: T | undefined): T => {
@@ -222,11 +222,11 @@ class Poller {
       st.lastPoll = Date.now();
       st.error = null;
     } catch (err) {
-      st.error = (err as Error).message || 'Unbekannter Fehler';
-      console.error(`[unifi] Poll für Site "${site}" fehlgeschlagen:`, st.error);
+      st.error = (err as Error).message || 'Unknown error';
+      console.error(`[unifi] Poll for site "${site}" failed:`, st.error);
       return;
     }
-    if (st.partialError) console.warn(`[unifi] Poll für Site "${site}" teilweise fehlgeschlagen:`, st.partialError);
+    if (st.partialError) console.warn(`[unifi] Poll for site "${site}" partially failed:`, st.partialError);
   }
 
   private async tick() {
@@ -240,7 +240,7 @@ class Poller {
     }
   }
 
-  /** Startet den Poller (idempotent) und wartet auf den ersten Poll. */
+  /** Starts the poller (idempotent) and waits for the first poll. */
   async ensureStarted(): Promise<void> {
     if (this.timer) return;
     this.timer = setInterval(() => void this.tick(), this.cfg.pollingIntervalMs);

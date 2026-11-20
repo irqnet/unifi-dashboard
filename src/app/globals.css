@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- Farben: Dunkel (Standard) und Hell, als RGB-Tripel für Tailwind ------------ */
+/* --- Colours: dark (default) and light, as RGB triplets for Tailwind ------------ */
 :root,
 html.dark {
   color-scheme: dark;
@@ -44,7 +44,7 @@ html.dark {
   --page-glow-b: rgba(167, 139, 250, 0.05);
 }
 
-/* Hell: an macOS angelehnt (hellgraue Fläche, weiße Kacheln, Systemblau) */
+/* Light: inspired by macOS (light grey surface, white tiles, system blue) */
 html.light {
   color-scheme: light;
   --noc-bg: 245 245 247;
@@ -113,7 +113,7 @@ textarea {
   @apply rounded-lg border border-noc-line bg-noc-bg px-3 py-2 text-sm text-noc-text placeholder:text-noc-muted/60 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500;
 }
 
-/* Randloses Eingabefeld für die gruppierten Listen im Admin-Bereich */
+/* Borderless input for the grouped lists in the admin area */
 .admin-input {
   @apply w-full rounded-md border-0 bg-transparent px-0 py-1 text-sm text-noc-text placeholder:text-noc-faint focus:ring-0;
 }
@@ -122,7 +122,7 @@ textarea {
   box-shadow: inset 0 -1px 0 rgb(var(--c-down));
 }
 
-/* --- Voucher-Druckansicht ---------------------------------------------- */
+/* --- Voucher print view ------------------------------------------------- */
 html:has(.voucher-print),
 html:has(.voucher-print) body {
   background: #e5e7eb;
@@ -141,8 +141,8 @@ html:has(.voucher-print) body {
   }
 }
 
-/* --- Kachel-Raster ------------------------------------------------------- */
-/* Breite in 12tel (2,3,4,6,8,12), Höhe in Reihen; Reihen wachsen mit dem Inhalt. */
+/* --- Tile grid ------------------------------------------------------------ */
+/* Width in twelfths (2,3,4,6,8,12), height in rows; rows grow with the content. */
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

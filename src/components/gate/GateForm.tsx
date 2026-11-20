@@ -2,6 +2,7 @@
 
 import { KeyRound, Loader2, ShieldCheck, User } from 'lucide-react';
 import { useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 import { Turnstile } from './Turnstile';
 
 export function GateForm({
@@ -10,13 +11,14 @@ export function GateForm({
   turnstileSiteKey,
   next,
 }: {
-  /** Anmeldung ohne Benutzerkonto (gemeinsamer Zugang) erlaubt */
+  /** Sign-in without a user account (shared access) is allowed */
   sharedAccess: boolean;
-  /** ACCESS_PASSWORD für den gemeinsamen Zugang gesetzt */
+  /** ACCESS_PASSWORD for shared access is set */
   requirePassword: boolean;
   turnstileSiteKey: string | null;
   next: string;
 }) {
+  const t = useT();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState<string | null>(null);
@@ -41,16 +43,16 @@ export function GateForm({
         body: JSON.stringify({ username: username.trim(), password, token }),
       });
       if (res.ok) {
-        // Bei Rewrite durch die Middleware steht die ursprünglich angefragte URL in der Adresszeile
+        // After a middleware rewrite the originally requested URL is still in the address bar
         const here = window.location.pathname + window.location.search;
         window.location.assign(window.location.pathname === '/gate' ? next : here);
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Zugang verweigert');
+      setError(data.error ?? t('gate.accessDenied'));
       setReset((n) => n + 1);
     } catch {
-      setError('Netzwerkfehler – bitte erneut versuchen');
+      setError(t('common.networkError'));
       setReset((n) => n + 1);
     } finally {
       setBusy(false);
@@ -61,7 +63,7 @@ export function GateForm({
     <form onSubmit={submit} className="space-y-4">
       <div>
         <label htmlFor="username" className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-noc-muted">
-          <User className="h-3.5 w-3.5" /> Benutzername
+          <User className="h-3.5 w-3.5" /> {t('common.username')}
         </label>
         <input
           id="username"
@@ -73,13 +75,13 @@ export function GateForm({
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           className="w-full"
-          placeholder={sharedAccess ? 'leer lassen für gemeinsamen Zugang' : ''}
+          placeholder={sharedAccess ? t('gate.usernamePlaceholder') : ''}
         />
       </div>
       {showPassword && (
         <div>
           <label htmlFor="password" className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-noc-muted">
-            <KeyRound className="h-3.5 w-3.5" /> {withUser || !sharedAccess ? 'Passwort' : 'Zugangspasswort'}
+            <KeyRound className="h-3.5 w-3.5" /> {withUser || !sharedAccess ? t('common.password') : t('gate.accessPassword')}
           </label>
           <input
             id="password"
@@ -100,7 +102,7 @@ export function GateForm({
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-        Dashboard öffnen
+        {t('gate.submit')}
       </button>
     </form>
   );

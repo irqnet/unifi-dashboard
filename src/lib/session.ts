@@ -1,23 +1,23 @@
 /**
- * Signierte Session-Cookies (JWT/HS256 via jose). Edge-kompatibel, wird
- * sowohl von middleware.ts als auch von Route Handlern verwendet.
+ * Signed session cookies (JWT/HS256 via jose). Edge-compatible, used by
+ * middleware.ts as well as by route handlers.
  */
 import { SignJWT, jwtVerify } from 'jose';
 import { cookieSecure, getSessionSecret, getSessionTtlHours } from './env';
 
 export const SESSION_COOKIE = 'ud_session';
 /**
- * viewer = gemeinsamer Zugang (Gate/Zugangspasswort) mit Gesamtansicht,
- * user   = Benutzerkonto mit Zugriff nur auf zugewiesene Statusseiten,
- * admin  = Vollzugriff (Admin-Passwort oder Benutzerkonto mit Admin-Rolle).
+ * viewer = shared access (gate/access password) with the full overview,
+ * user   = user account with access to assigned status pages only,
+ * admin  = full access (admin password or user account with the admin role).
  */
 export type Role = 'viewer' | 'user' | 'admin';
 
 export interface SessionPayload {
   role: Role;
-  /** Benutzer-ID bei Anmeldung mit Benutzerkonto */
+  /** User ID when signed in with a user account */
   uid?: number;
-  /** Session-Version des Benutzers (ändert sich bei Passwortwechsel/Sperre) */
+  /** User's session version (changes on password change/disable) */
   sv?: number;
   iat?: number;
   exp?: number;

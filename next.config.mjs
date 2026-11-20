@@ -3,7 +3,7 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
-  // Native Module nicht bundlen, sondern zur Laufzeit aus node_modules laden
+  // Do not bundle native modules; load them from node_modules at runtime
   serverExternalPackages: ['better-sqlite3', 'undici'],
   async headers() {
     return [

@@ -2,6 +2,8 @@
 
 import { ExternalLink, Globe, Lock, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useI18n, useT } from '@/components/i18n/I18nProvider';
+import type { TFunction } from '@/lib/i18n/translate';
 import type { SiteInfo } from '@/lib/views';
 import {
   Banner,
@@ -78,13 +80,13 @@ function toggleId(list: number[], id: number) {
   return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 }
 
-function fmtLogin(ts: string | null) {
-  if (!ts) return 'Noch nie angemeldet';
+function fmtLogin(ts: string | null, t: TFunction, tag: string) {
+  if (!ts) return t('users.neverLoggedIn');
   const d = new Date(`${ts.replace(' ', 'T')}Z`);
-  return `Zuletzt angemeldet ${d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+  return t('users.lastLogin', { date: d.toLocaleString(tag, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) });
 }
 
-// --- Statusseiten --------------------------------------------------------------------
+// --- Status pages --------------------------------------------------------------------
 
 function PageEditor({
   initial,
@@ -105,6 +107,7 @@ function PageEditor({
   onDelete?: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<PageDraft>(initial);
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [busy, setBusy] = useState(false);
@@ -113,8 +116,8 @@ function PageEditor({
   const set = <K extends keyof PageDraft>(k: K, v: PageDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   async function submit() {
-    if (!draft.title.trim()) return setError('Gib der Statusseite einen Titel.');
-    if (!draft.slug) return setError('Gib eine Adresse an, zum Beispiel „gebaeude-a“.');
+    if (!draft.title.trim()) return setError(t('pages.titleRequired'));
+    if (!draft.slug) return setError(t('pages.slugRequired'));
     setBusy(true);
     setError(null);
     const err = await onSave(draft);
@@ -123,21 +126,21 @@ function PageEditor({
   }
 
   return (
-    <Sheet title={isNew ? 'Neue Statusseite' : 'Statusseite bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+    <Sheet title={isNew ? t('pages.new') : t('pages.edit')} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
       <Group>
-        <FieldRow label="Titel" htmlFor="sp-title">
+        <FieldRow label={t('pages.titleLabel')} htmlFor="sp-title">
           <TextInput
             id="sp-title"
             value={draft.title}
             maxLength={80}
-            placeholder="z. B. Gebäude A"
+            placeholder={t('pages.titlePlaceholder')}
             onChange={(e) => {
               const title = e.target.value;
               setDraft((d) => ({ ...d, title, slug: slugTouched ? d.slug : slugify(title) }));
             }}
           />
         </FieldRow>
-        <FieldRow label="Adresse" htmlFor="sp-slug">
+        <FieldRow label={t('pages.slugLabel')} htmlFor="sp-slug">
           <div className="flex items-center text-sm">
             <span className="text-noc-muted">/s/</span>
             <TextInput
@@ -152,24 +155,22 @@ function PageEditor({
             />
           </div>
         </FieldRow>
-        <FieldRow label="Beschreibung" htmlFor="sp-desc">
-          <TextInput id="sp-desc" value={draft.description} maxLength={300} placeholder="Optional" onChange={(e) => set('description', e.target.value)} />
+        <FieldRow label={t('common.description')} htmlFor="sp-desc">
+          <TextInput id="sp-desc" value={draft.description} maxLength={300} placeholder={t('common.optional')} onChange={(e) => set('description', e.target.value)} />
         </FieldRow>
       </Group>
 
       <Group
         footer={
-          draft.isPublic
-            ? 'Jeder mit der Adresse sieht die Seite, ohne Login und ohne Bot-Prüfung. MACs und WAN-IP bleiben maskiert, Client-Namen sind sichtbar, sofern die Gruppe nicht anonymisiert ist.'
-            : undefined
+          draft.isPublic ? t('pages.publicHint') : undefined
         }
       >
-        <SwitchRow title="WAN-Durchsatz und Gateway zeigen" checked={draft.showWan} onChange={(v) => set('showWan', v)} />
-        <SwitchRow title="Öffentlich" subtitle="Ohne Login erreichbar, z. B. für einen Wandmonitor." checked={draft.isPublic} onChange={(v) => set('isPublic', v)} />
+        <SwitchRow title={t('pages.showWan')} checked={draft.showWan} onChange={(v) => set('showWan', v)} />
+        <SwitchRow title={t('pages.public')} subtitle={t('pages.publicSubtitle')} checked={draft.isPublic} onChange={(v) => set('isPublic', v)} />
       </Group>
 
-      <Group title="Netzwerk-Gruppen" aside={`${draft.groupIds.length} ausgewählt`}>
-        {groups.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">An diesem Standort gibt es noch keine Netzwerk-Gruppen.</p>}
+      <Group title={t('pages.networkGroups')} aside={t('admin.selected', { count: draft.groupIds.length })}>
+        {groups.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">{t('pages.noNetworkGroups')}</p>}
         {groups.map((g) => (
           <CheckRow
             key={g.id}
@@ -177,13 +178,13 @@ function PageEditor({
             onToggle={() => set('groupIds', toggleId(draft.groupIds, g.id))}
             icon={<span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />}
             title={g.name}
-            subtitle={g.hidden ? 'Im Dashboard ausgeblendet' : undefined}
+            subtitle={g.hidden ? t('pages.hiddenOnDashboard') : undefined}
           />
         ))}
       </Group>
 
-      <Group title="Geräte-Gruppen" aside={`${draft.deviceGroupIds.length} ausgewählt`}>
-        {deviceGroups.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">An diesem Standort gibt es noch keine Geräte-Gruppen.</p>}
+      <Group title={t('pages.deviceGroups')} aside={t('admin.selected', { count: draft.deviceGroupIds.length })}>
+        {deviceGroups.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">{t('pages.noDeviceGroups')}</p>}
         {deviceGroups.map((g) => (
           <CheckRow
             key={g.id}
@@ -191,25 +192,25 @@ function PageEditor({
             onToggle={() => set('deviceGroupIds', toggleId(draft.deviceGroupIds, g.id))}
             icon={<span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: g.color }} />}
             title={g.name}
-            subtitle={g.hidden ? 'Im Dashboard ausgeblendet' : undefined}
+            subtitle={g.hidden ? t('pages.hiddenOnDashboard') : undefined}
           />
         ))}
       </Group>
 
       {!isNew && (
-        <Group title="Freigegeben für">
-          <Row title={users.length ? users.map((u) => u.displayName || u.username).join(', ') : 'Noch kein Benutzer'} subtitle="Freigaben verwaltest du unter Benutzer." />
+        <Group title={t('pages.sharedWith')}>
+          <Row title={users.length ? users.map((u) => u.displayName || u.username).join(', ') : t('pages.noUserYet')} subtitle={t('pages.sharedWithHint')} />
         </Group>
       )}
 
       {!isNew && onDelete && (
         <DeleteRow
-          label="Statusseite löschen"
+          label={t('pages.delete')}
           confirming={confirmDelete}
           onAsk={() => setConfirmDelete(true)}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void onDelete()}
-          hint="Die Adresse funktioniert danach nicht mehr. Die Gruppen bleiben erhalten."
+          hint={t('pages.deleteHint')}
         />
       )}
     </Sheet>
@@ -229,6 +230,7 @@ export function StatusPagesSection({
   onError: (e: string | null) => void;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [pages, setPages] = useState<StatusPage[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [groups, setGroups] = useState<GroupRef[]>([]);
@@ -287,20 +289,20 @@ export function StatusPagesSection({
   return (
     <>
       <PageHeader
-        title="Statusseiten"
-        lead="Eine Statusseite zeigt nur die gewählten Gruppen dieses Standorts unter einer eigenen Adresse. Benutzer sehen nur die Seiten, die du ihnen freigibst."
+        title={t('admin.nav.statusPages')}
+        lead={t('pages.lead')}
         action={
           <PrimaryButton onClick={() => setEditing('new')}>
-            <Plus className="h-4 w-4" /> Statusseite
+            <Plus className="h-4 w-4" /> {t('header.statusPage')}
           </PrimaryButton>
         }
       />
 
-      <Group title="Seiten">
+      <Group title={t('pages.pages')}>
         {loading && !sitePages.length && <LoadingRow />}
         {!loading && !sitePages.length && (
-          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Erste Statusseite anlegen</LinkButton>}>
-            Noch keine Statusseiten an diesem Standort. Lege zum Beispiel eine Seite pro Gebäude oder Mieter an.
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>{t('pages.createFirst')}</LinkButton>}>
+            {t('pages.emptyHint')}
           </EmptyRow>
         )}
         {sitePages.map((p) => {
@@ -323,14 +325,12 @@ export function StatusPagesSection({
                     {p.title} <span className="ml-1 font-mono text-[12px] font-normal text-noc-muted">/s/{p.slug}</span>
                   </>
                 }
-                subtitle={(p.showWan ? ['WAN', ...parts] : parts).join(', ') || 'Keine Gruppen gewählt'}
+                subtitle={(p.showWan ? ['WAN', ...parts] : parts).join(', ') || t('pages.noGroups')}
                 onClick={() => setEditing(p.id)}
                 detail={
                   <>
-                    {p.isPublic ? <Pill tone="warn">öffentlich</Pill> : null}
-                    <span className="hidden sm:inline">
-                      {pageUsers} Benutzer
-                    </span>
+                    {p.isPublic ? <Pill tone="warn">{t('pages.publicPill')}</Pill> : null}
+                    <span className="hidden sm:inline">{t('pages.userCount', { count: pageUsers })}</span>
                   </>
                 }
               />
@@ -339,8 +339,8 @@ export function StatusPagesSection({
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center border-l border-fg/[0.06] px-3.5 text-noc-muted hover:bg-fg/[0.03] hover:text-sky-300"
-                title="Seite öffnen"
-                aria-label={`${p.title} öffnen`}
+                title={t('pages.open')}
+                aria-label={t('pages.openLabel', { title: p.title })}
               >
                 <ExternalLink className="h-4 w-4" />
               </a>
@@ -369,7 +369,7 @@ export function StatusPagesSection({
   );
 }
 
-// --- Benutzer -----------------------------------------------------------------------
+// --- Users --------------------------------------------------------------------------
 
 function UserEditor({
   initial,
@@ -392,6 +392,7 @@ function UserEditor({
   onDelete?: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t, tag } = useI18n();
   const [draft, setDraft] = useState<UserDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -400,8 +401,8 @@ function UserEditor({
   const siteName = (s: string) => sites.find((x) => x.name === s)?.desc ?? s;
 
   async function submit() {
-    if (!draft.username.trim()) return setError('Gib einen Benutzernamen an.');
-    if ((isNew || draft.password) && draft.password.length < 8) return setError('Das Passwort braucht mindestens 8 Zeichen.');
+    if (!draft.username.trim()) return setError(t('users.usernameRequired'));
+    if ((isNew || draft.password) && draft.password.length < 8) return setError(t('users.passwordTooShort'));
     setBusy(true);
     setError(null);
     const err = await onSave(draft);
@@ -410,9 +411,9 @@ function UserEditor({
   }
 
   return (
-    <Sheet title={isNew ? 'Neuer Benutzer' : 'Benutzer bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
-      <Group footer={!isNew ? fmtLogin(lastLoginAt ?? null) : undefined}>
-        <FieldRow label="Benutzername" htmlFor="u-name">
+    <Sheet title={isNew ? t('users.new') : t('users.edit')} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+      <Group footer={!isNew ? fmtLogin(lastLoginAt ?? null, t, tag) : undefined}>
+        <FieldRow label={t('common.username')} htmlFor="u-name">
           <TextInput
             id="u-name"
             value={draft.username}
@@ -423,30 +424,30 @@ function UserEditor({
             onChange={(e) => set('username', e.target.value)}
           />
         </FieldRow>
-        <FieldRow label="Anzeigename" htmlFor="u-display">
-          <TextInput id="u-display" value={draft.displayName} maxLength={80} placeholder="Optional" onChange={(e) => set('displayName', e.target.value)} />
+        <FieldRow label={t('users.displayName')} htmlFor="u-display">
+          <TextInput id="u-display" value={draft.displayName} maxLength={80} placeholder={t('common.optional')} onChange={(e) => set('displayName', e.target.value)} />
         </FieldRow>
-        <FieldRow label={isNew ? 'Passwort' : 'Neues Passwort'} htmlFor="u-pw">
+        <FieldRow label={isNew ? t('common.password') : t('users.newPassword')} htmlFor="u-pw">
           <TextInput
             id="u-pw"
             type="password"
             autoComplete="new-password"
             value={draft.password}
             maxLength={200}
-            placeholder={isNew ? 'Mindestens 8 Zeichen' : 'Leer lassen, um es zu behalten'}
+            placeholder={isNew ? t('users.passwordMin') : t('users.passwordKeep')}
             onChange={(e) => set('password', e.target.value)}
           />
         </FieldRow>
       </Group>
 
-      <Group footer={isSelf ? 'Rolle und Sperre deines eigenen Kontos kannst du nicht ändern.' : 'Ändern sich Passwort, Rolle oder Sperre, werden laufende Sitzungen sofort beendet.'}>
-        <SwitchRow title="Admin" subtitle="Sieht und verwaltet alles." checked={draft.isAdmin} onChange={(v) => set('isAdmin', v)} disabled={isSelf} />
-        <SwitchRow title="Gesperrt" subtitle="Anmeldung nicht möglich." checked={draft.disabled} onChange={(v) => set('disabled', v)} disabled={isSelf} />
+      <Group footer={isSelf ? t('users.selfHint') : t('users.sessionHint')}>
+        <SwitchRow title="Admin" subtitle={t('users.adminHint')} checked={draft.isAdmin} onChange={(v) => set('isAdmin', v)} disabled={isSelf} />
+        <SwitchRow title={t('users.disabled')} subtitle={t('users.disabledHint')} checked={draft.disabled} onChange={(v) => set('disabled', v)} disabled={isSelf} />
       </Group>
 
       {!draft.isAdmin && (
-        <Group title="Freigegebene Statusseiten" aside={`${draft.pageIds.length} ausgewählt`}>
-          {pages.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">Lege zuerst unter Statusseiten eine Seite an.</p>}
+        <Group title={t('users.assignedPages')} aside={t('admin.selected', { count: draft.pageIds.length })}>
+          {pages.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">{t('users.createPageFirst')}</p>}
           {pages.map((p) => (
             <CheckRow
               key={p.id}
@@ -462,13 +463,13 @@ function UserEditor({
 
       {!isNew && onDelete && (
         <DeleteRow
-          label="Benutzer löschen"
+          label={t('users.delete')}
           confirming={confirmDelete}
           onAsk={() => setConfirmDelete(true)}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void onDelete()}
           disabled={isSelf}
-          hint={isSelf ? 'Dein eigenes Konto kannst du nicht löschen.' : undefined}
+          hint={isSelf ? t('users.cannotDeleteSelf') : undefined}
         />
       )}
     </Sheet>
@@ -488,6 +489,7 @@ export function UsersSection({
   onError: (e: string | null) => void;
   onChanged: () => void;
 }) {
+  const { t, tag } = useI18n();
   const [pages, setPages] = useState<StatusPage[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -555,29 +557,29 @@ export function UsersSection({
   return (
     <>
       <PageHeader
-        title="Benutzer"
-        lead="Konten melden sich am Login mit Benutzername und Passwort an. Betrachter sehen nur ihre freigegebenen Statusseiten, Admins sehen alles."
+        title={t('admin.nav.users')}
+        lead={t('users.lead')}
         action={
           <PrimaryButton onClick={() => setEditing('new')}>
-            <Plus className="h-4 w-4" /> Benutzer
+            <Plus className="h-4 w-4" /> {t('users.user')}
           </PrimaryButton>
         }
       />
 
       {sharedError && <Banner tone="warn">{sharedError}</Banner>}
-      <Group footer="Zum Abschalten muss es mindestens ein aktives Admin-Konto geben, sonst sperrst du dich aus.">
+      <Group footer={t('users.sharedFooter')}>
         <SwitchRow
-          title="Zugang ohne Benutzerkonto"
-          subtitle="Mit dem gemeinsamen Zugangspasswort sieht man die Gesamtansicht."
+          title={t('users.shared')}
+          subtitle={t('users.sharedHint')}
           checked={sharedAccess}
           onChange={(v) => void toggleShared(v)}
         />
       </Group>
 
-      <Group title="Konten">
+      <Group title={t('users.accounts')}>
         {loading && !users.length && <LoadingRow />}
         {!loading && !users.length && (
-          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Ersten Benutzer anlegen</LinkButton>}>Noch keine Benutzerkonten.</EmptyRow>
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>{t('users.createFirst')}</LinkButton>}>{t('users.empty')}</EmptyRow>
         )}
         {users.map((u, i) => {
           const name = u.displayName || u.username;
@@ -603,18 +605,18 @@ export function UsersSection({
               title={
                 <>
                   {name}
-                  {u.id === currentUserId && <span className="ml-1.5 text-[12px] font-normal text-noc-muted">(du)</span>}
+                  {u.id === currentUserId && <span className="ml-1.5 text-[12px] font-normal text-noc-muted">{t('users.you')}</span>}
                 </>
               }
-              subtitle={u.displayName ? `@${u.username}` : fmtLogin(u.lastLoginAt)}
+              subtitle={u.displayName ? `@${u.username}` : fmtLogin(u.lastLoginAt, t, tag)}
               onClick={() => setEditing(u.id)}
               detail={
                 u.disabled ? (
-                  <Pill tone="danger">gesperrt</Pill>
+                  <Pill tone="danger">{t('users.disabledPill')}</Pill>
                 ) : u.isAdmin ? (
                   <Pill tone="info">Admin</Pill>
                 ) : (
-                  <span className="max-w-[16rem] truncate">{pageNames || 'Keine Seite'}</span>
+                  <span className="max-w-[16rem] truncate">{pageNames || t('users.noPage')}</span>
                 )
               }
             />

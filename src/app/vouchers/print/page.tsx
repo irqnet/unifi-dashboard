@@ -3,23 +3,29 @@ import QRCode from 'qrcode';
 import { PrintToolbar } from '@/components/vouchers/PrintToolbar';
 import { getSession } from '@/lib/auth';
 import { resolveSite } from '@/lib/site';
-import { formatDuration, listVouchers, wifiInfo, type VoucherView } from '@/lib/vouchers';
+import { isLocale } from '@/lib/i18n/config';
+import { getLocale, getT } from '@/lib/i18n/server';
+import { createT, type TFunction } from '@/lib/i18n/translate';
+import { formatDuration, formatKbps, formatMegabytes } from '@/lib/voucherFormat';
+import { listVouchers, wifiInfo, type VoucherView } from '@/lib/vouchers';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Voucher drucken' };
 
-/** Escaping für das WIFI:-QR-Format (\ ; , : " müssen maskiert werden). */
+export async function generateMetadata() {
+  return { title: (await getT())('print.title') };
+}
+
+/** Escaping for the WIFI: QR format (\ ; , : " must be escaped). */
 function esc(v: string) {
   return v.replace(/([\;,:"])/g, '\\$1');
 }
 
-function limits(v: VoucherView): string[] {
+function limits(v: VoucherView, t: TFunction): string[] {
   const out: string[] = [];
-  out.push(v.quota === 0 ? 'Mehrfach nutzbar' : v.quota === 1 ? 'Für 1 Gerät' : `Für ${v.quota} Geräte`);
-  const kb = (k: number | null) => (k ? (k >= 1000 ? `${+(k / 1000).toFixed(1)} Mbit/s` : `${k} kbit/s`) : null);
-  if (v.down) out.push(`Download max. ${kb(v.down)}`);
-  if (v.up) out.push(`Upload max. ${kb(v.up)}`);
-  if (v.megabytes) out.push(`Datenvolumen ${v.megabytes >= 1024 ? `${+(v.megabytes / 1024).toFixed(1)} GB` : `${v.megabytes} MB`}`);
+  out.push(v.quota === 0 ? t('print.multiUse') : t('print.forDevices', { count: v.quota }));
+  if (v.down) out.push(t('print.downMax', { rate: formatKbps(v.down) }));
+  if (v.up) out.push(t('print.upMax', { rate: formatKbps(v.up) }));
+  if (v.megabytes) out.push(t('print.dataVolume', { volume: formatMegabytes(v.megabytes) }));
   return out;
 }
 
@@ -33,13 +39,18 @@ export default async function VoucherPrintPage({ searchParams }: { searchParams:
   const site = await resolveSite(one('site') || null);
   const ids = new Set(one('ids').split(',').filter(Boolean));
   const layout = one('layout') === 'bon' ? 'bon' : 'a4';
+  // The printout has its own language (guests receive it); defaults to the UI language
+  const uiLocale = await getLocale();
+  const lang = isLocale(one('lang')) ? (one('lang') as typeof uiLocale) : uiLocale;
+  const t = createT(lang);
+  const ui = createT(uiLocale);
 
   let vouchers: VoucherView[] = [];
   let error: string | null = null;
-  if (!site) error = 'Unbekannte Site';
+  if (!site) error = ui('api.unknownSite');
   else {
     try {
-      vouchers = (await listVouchers(site)).vouchers.filter((v) => ids.has(v.id));
+      vouchers = (await listVouchers(site, ui)).vouchers.filter((v) => ids.has(v.id));
     } catch (err) {
       error = (err as Error).message;
     }
@@ -54,11 +65,11 @@ export default async function VoucherPrintPage({ searchParams }: { searchParams:
     : null;
 
   return (
-    <div className="voucher-print min-h-screen">
+    <div className="voucher-print min-h-screen" lang={lang}>
       <style>{`@page { size: ${layout === 'bon' ? '80mm auto' : 'A4'}; margin: ${layout === 'bon' ? '4mm' : '10mm'}; }`}</style>
-      <PrintToolbar count={vouchers.length} layout={layout} autoPrint={!error && vouchers.length > 0} />
+      <PrintToolbar count={vouchers.length} layout={layout} lang={lang} autoPrint={!error && vouchers.length > 0} />
       {error && <p className="p-6 text-center text-rose-700">{error}</p>}
-      {!error && vouchers.length === 0 && <p className="p-6 text-center text-slate-600">Keine passenden Voucher gefunden.</p>}
+      {!error && vouchers.length === 0 && <p className="p-6 text-center text-slate-600">{ui('print.none')}</p>}
 
       <div
         className={
@@ -76,7 +87,7 @@ export default async function VoucherPrintPage({ searchParams }: { searchParams:
                 : 'break-inside-avoid rounded-xl border-2 border-dashed border-slate-300 bg-white p-[6mm] text-slate-900'
             }
           >
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Gäste-WLAN</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('print.guestWifi')}</div>
             {wifi.ssid && <div className="mt-1 text-lg font-semibold">{wifi.ssid}</div>}
             <div className={layout === 'bon' ? 'mt-4' : 'mt-4 flex items-center gap-[5mm]'}>
               {qr && (
@@ -87,23 +98,23 @@ export default async function VoucherPrintPage({ searchParams }: { searchParams:
                 />
               )}
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-wider text-slate-500">Zugangscode</div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500">{t('print.accessCode')}</div>
                 <div className="whitespace-nowrap font-mono text-[22px] font-bold tracking-[0.08em] text-slate-900">{v.code}</div>
                 {wifi.password && (
                   <div className="mt-1 text-xs text-slate-600">
-                    WLAN-Passwort: <span className="font-mono font-semibold text-slate-900">{wifi.password}</span>
+                    {t('print.wifiPassword')}: <span className="font-mono font-semibold text-slate-900">{wifi.password}</span>
                   </div>
                 )}
               </div>
             </div>
             <ul className={layout === 'bon' ? 'mt-4 space-y-0.5 text-xs text-slate-700' : 'mt-4 space-y-0.5 text-xs text-slate-700'}>
-              <li>Gültig für {formatDuration(v.minutes)} ab erster Anmeldung</li>
-              {limits(v).map((l) => (
+              <li>{t('print.validFor', { duration: formatDuration(v.minutes, t) })}</li>
+              {limits(v, t).map((l) => (
                 <li key={l}>{l}</li>
               ))}
             </ul>
             <p className="mt-3 text-[11px] leading-snug text-slate-500">
-              {qr ? 'QR-Code scannen oder' : 'Mit dem WLAN'} {wifi.ssid ? `„${wifi.ssid}“` : ''} verbinden und im Anmeldefenster den Zugangscode eingeben.
+              {t(qr ? 'print.howToQr' : 'print.howTo', { ssid: wifi.ssid ? t('print.ssidQuoted', { ssid: wifi.ssid }) : '' })}
             </p>
             {v.note && <p className="mt-2 border-t border-slate-200 pt-2 text-[11px] text-slate-500">{v.note}</p>}
           </article>

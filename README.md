@@ -1,221 +1,235 @@
-# UniFi Network Status- & Monitoring-Dashboard
+# UniFi Network Status & Monitoring Dashboard
 
-Echtzeit-Statusseite für UniFi-Netzwerke im NOC-Stil. Seite **Netzwerke** (`/`): WAN-Durchsatz mit Auslastungs-Gauges gegen die in UniFi hinterlegten „Expected ISP Speeds“ des aktiven WAN (inkl. Failover) und konsolidierte VLAN-Gruppen mit Live-Traffic-Verlauf. Seite **Hardware** (`/hardware`): Switche mit Port-Matrix und Access Points, nach Geräte-Gruppen geordnet. Geschützt durch ein kombiniertes **Passwort- & Cloudflare-Turnstile-Gate** und einen separaten **Admin-Bereich** zur Gruppierung von Netzwerken/VLANs.
+Real-time NOC-style status page for UniFi networks, available in **English and German**. The **Networks** page (`/`) shows WAN throughput with utilisation gauges against the "Expected ISP Speeds" configured in UniFi for the active WAN (failover included) and consolidated VLAN groups with live traffic history. The **Hardware** page (`/hardware`) shows switches with a port matrix and access points, organised by device groups. Access is protected by a combined **password & Cloudflare Turnstile gate** and a separate **admin area** for grouping networks/VLANs.
 
 - **Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS · Lucide · Recharts · SQLite (`better-sqlite3`) · `jose` (JWT)
-- **Betrieb:** lokal gebautes Container-Image mit Podman / `podman-compose` (kein Registry-Build, keine GitHub Actions)
+- **Operation:** locally built container image with Podman / `podman-compose` (no registry build, no GitHub Actions)
 
 ---
 
-## Architektur
+## Architecture
 
 ```
-Browser ──► middleware.ts (JWT-Cookie prüfen: viewer / admin)
+Browser ──► middleware.ts (checks the JWT cookie: viewer / admin)
    │
-   ├─ /gate ─────────────── Zugangs-Gate (ACCESS_PASSWORD + Turnstile) ─► POST /api/auth/verify
-   ├─ / ─────────────────── Dashboard (Client) ── pollt ──► GET /api/unifi/dashboard?site=…
-   └─ /admin ────────────── Admin-UI ─────────────────────► /api/admin/{groups,networks,settings}
+   ├─ /gate ─────────────── Access gate (ACCESS_PASSWORD + Turnstile) ─► POST /api/auth/verify
+   ├─ / ─────────────────── Dashboard (client) ── polls ──► GET /api/unifi/dashboard?site=…
+   └─ /admin ────────────── Admin UI ─────────────────────► /api/admin/{groups,networks,settings}
                                                                      │
-   Next.js Route Handler (BFF, Node-Runtime) ◄───────────────────────┘
-     ├─ lib/unifi/client.ts     UniFi-API-Client (API-Key oder Login + CSRF, Self-Signed-SSL)
-     ├─ lib/unifi/poller.ts     Hintergrund-Poller je Site + In-Memory-Ringpuffer (Verlauf)
-     ├─ lib/unifi/aggregate.ts  Gruppen-Aggregation, Datenschutz, Hardware-Normalisierung
-     └─ lib/db.ts               SQLite: Gruppen, Netzwerk-Optionen, Einstellungen (/app/data/dashboard.db)
+   Next.js route handlers (BFF, Node runtime) ◄──────────────────────┘
+     ├─ lib/unifi/client.ts     UniFi API client (API key or login + CSRF, self-signed TLS)
+     ├─ lib/unifi/poller.ts     Background poller per site + in-memory ring buffer (history)
+     ├─ lib/unifi/aggregate.ts  Group aggregation, privacy, hardware normalisation
+     ├─ lib/i18n/               Translations (English / German) and language detection
+     └─ lib/db.ts               SQLite: groups, network options, settings (/app/data/dashboard.db)
 ```
 
-- **Backend-for-Frontend:** Der Browser spricht nie direkt mit dem Controller. Zugangsdaten bleiben serverseitig, CORS und Self-Signed-Zertifikate (`UNIFI_VERIFY_SSL=false`) werden im BFF gehandhabt.
-- **Poller & Ringpuffer:** Pro Site wird im Intervall `POLLING_INTERVAL_MS` gepollt; jedes Sample speichert Down-/Upstream und Client-Zahl je Netzwerk sowie den WAN-Durchsatz. Der Puffer hält die letzten `HISTORY_MINUTES` (Standard 30). Gruppen-Verläufe werden daraus durch Summierung der enthaltenen VLANs berechnet. Der Verlauf ist bewusst flüchtig (geht bei Neustart verloren).
-- **UniFi-Endpunkte:** `stat/device`, `stat/sta`, `rest/networkconf` (60 s gecacht), `stat/health`, `self/sites`. Präfix `/proxy/network` für UniFi OS, ohne Präfix für klassische Controller.
-- **Client-Zuordnung zu VLANs:** `network_id` → Netzwerkname → Subnetz-Match der Client-IP.
-- **Traffic-Richtung:** `tx_bytes-r` (bzw. `wired-tx_bytes-r`) aus Sicht der Infrastruktur = **Download** zum Client, `rx_bytes-r` = **Upload**.
+- **Backend for frontend:** The browser never talks to the controller directly. Credentials stay on the server; CORS and self-signed certificates (`UNIFI_VERIFY_SSL=false`) are handled in the BFF.
+- **Poller & ring buffer:** Each site is polled every `POLLING_INTERVAL_MS`; every sample stores downstream/upstream and client count per network as well as the WAN throughput. The buffer keeps the last `HISTORY_MINUTES` (default 30). Group histories are computed by summing the contained VLANs. The history is deliberately volatile (lost on restart).
+- **UniFi endpoints:** `stat/device`, `stat/sta`, `rest/networkconf` (cached for 60 s), `stat/health`, `self/sites`. Prefix `/proxy/network` for UniFi OS, no prefix for classic controllers.
+- **Client-to-VLAN mapping:** `network_id` → network name → subnet match of the client IP.
+- **Traffic direction:** `tx_bytes-r` (or `wired-tx_bytes-r`) from the infrastructure's point of view = **download** to the client, `rx_bytes-r` = **upload**.
 
-## Sicherheit: Zwei-Stufen-Zugriff
+## Languages
 
-| Bereich | Erforderliche Rolle | Ohne Berechtigung |
+The whole interface (dashboard, hardware, status pages, gate and login, admin area, voucher printout) is available in English and German. English is the default.
+
+- **Switching:** language switcher in the header menu and on the gate/login pages. The voucher printout has its own language selector, so guests can get a German or English voucher regardless of the admin's language.
+- **Detection order:** saved choice (cookie `ud_lang`; for user accounts also stored in the database and applied on every device) → browser language (`Accept-Language`) → instance default.
+- **Instance default:** *Admin → General → Language* (English unless changed).
+- **Formats:** English uses `en-GB` (24-hour clock, day/month order), German uses `de-DE`.
+- **Adding or changing text:** messages live in `src/lib/i18n/messages/*.ts`, one file per area with the English and German dictionaries side by side. English is the source of truth; the German dictionary is typed against it, so a missing translation fails `npm run typecheck`. Placeholders use `{name}`; plurals use `singular|plural` with a `count` parameter.
+
+## Security: two-level access
+
+| Area | Required role | Without permission |
 |---|---|---|
-| `/gate`, `/api/auth/verify`, `/api/health` | – (öffentlich) | – |
-| `/`, `/hardware`, `/api/unifi/*` | `viewer` oder `admin` | Gate-Seite bzw. `401`; Rolle `user` → eigene Statusseiten |
-| `/s/<adresse>`, `/api/status/<adresse>` | öffentlich markierte Seite, `viewer`, `admin` oder `user` mit Zuweisung | Gate-Seite bzw. `401/403` |
-| `/admin/login`, `/api/auth/admin` | gültige Session | Gate-Seite bzw. `401` |
-| `/admin`, `/vouchers`, `/api/admin/*` (GET/POST/PUT/DELETE) | `admin` | Admin-Login bzw. `401/403` |
+| `/gate`, `/api/auth/verify`, `/api/health`, `/api/locale` | – (public) | – |
+| `/`, `/hardware`, `/api/unifi/*` | `viewer` or `admin` | gate page or `401`; role `user` → own status pages |
+| `/s/<address>`, `/api/status/<address>` | page marked public, `viewer`, `admin` or `user` with assignment | gate page or `401/403` |
+| `/admin/login`, `/api/auth/admin` | valid session | gate page or `401` |
+| `/admin`, `/vouchers`, `/api/admin/*` (GET/POST/PUT/DELETE) | `admin` | admin login or `401/403` |
 
-1. **Zugangs-Gate:** Verlangt `ACCESS_PASSWORD` (falls gesetzt) und/oder Cloudflare Turnstile (`TURNSTILE_ENABLED=true`). Das Passwort wird per `crypto.timingSafeEqual` (über SHA-256-Digests, längenunabhängig) verglichen, das Turnstile-Token serverseitig gegen `https://challenges.cloudflare.com/turnstile/v0/siteverify` geprüft – inkl. Client-IP aus `CF-Connecting-IP` / `X-Forwarded-For`. Erfolg ⇒ signiertes JWT-Cookie `ud_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, `role: "viewer"`).
-2. **Admin:** Über das Zahnrad im Header ⇒ `/admin/login` ⇒ `ADMIN_PASSWORD` (ebenfalls timing-safe) hebt das JWT auf `role: "admin"` an. „Admin beenden“ stuft wieder auf `viewer` zurück.
-3. **Defense-in-Depth:** Zusätzlich zur Middleware prüft jeder Route Handler die Rolle erneut. Login-Endpunkte sind per IP rate-limitiert (10 Versuche / 5 min).
-4. **Benutzerkonten:** Im Admin-Bereich angelegte Benutzer melden sich am Gate mit Benutzername + Passwort an (scrypt-Hash in SQLite). Rolle **Admin** = Vollzugriff, Rolle **Betrachter** (`user`) = nur die zugewiesenen Statusseiten; die API liefert serverseitig nur deren Gruppen. Passwortwechsel, Sperre, Rollenwechsel oder Löschen beenden laufende Sitzungen sofort. Optional lässt sich der gemeinsame Zugang (Gate ohne Konto, Rolle `viewer`) abschalten.
-5. **Datenschutz:** `HIDE_SENSITIVE_IPS=true` maskiert WAN-IP und Client-MACs für Nicht-Admins. Pro Netzwerk/Gruppe können Clients anonymisiert oder Netzwerke komplett ausgeblendet werden.
+1. **Access gate:** Requires `ACCESS_PASSWORD` (if set) and/or Cloudflare Turnstile (`TURNSTILE_ENABLED=true`). The password is compared with `crypto.timingSafeEqual` (over SHA-256 digests, independent of length); the Turnstile token is verified server-side against `https://challenges.cloudflare.com/turnstile/v0/siteverify`, including the client IP from `CF-Connecting-IP` / `X-Forwarded-For`. Success ⇒ signed JWT cookie `ud_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, `role: "viewer"`).
+2. **Admin:** The gear icon in the header ⇒ `/admin/login` ⇒ `ADMIN_PASSWORD` (also timing-safe) upgrades the JWT to `role: "admin"`. "Leave admin mode" downgrades back to `viewer`.
+3. **Defence in depth:** In addition to the middleware, every route handler checks the role again. Login endpoints are rate-limited per IP (10 attempts / 5 min).
+4. **User accounts:** Users created in the admin area sign in at the gate with username + password (scrypt hash in SQLite). Role **Admin** = full access, role **Viewer** (`user`) = only the assigned status pages; the API only returns their groups, enforced on the server. Changing the password, locking, changing the role or deleting ends running sessions immediately. Optionally, shared access (gate without an account, role `viewer`) can be switched off.
+5. **Privacy:** `HIDE_SENSITIVE_IPS=true` masks the WAN IP and client MACs for non-admins. Clients can be anonymised and networks hidden per network/group.
 
-> Fehlt `SESSION_SECRET` (≥ 32 Zeichen) oder ist Turnstile aktiviert aber unvollständig konfiguriert, zeigt das Gate einen Konfigurationsfehler statt sich zu öffnen.
+> If `SESSION_SECRET` (≥ 32 characters) is missing, or Turnstile is enabled but incompletely configured, the gate shows a configuration error instead of opening.
 
-## Cloudflare Turnstile einrichten
+## Setting up Cloudflare Turnstile
 
-1. Cloudflare Dashboard → **Turnstile** → *Add widget*.
-2. Hostname(s) eintragen, unter denen das Dashboard erreichbar ist (z. B. `status.example.com`; für lokale Tests zusätzlich `localhost`).
-3. Widget-Modus *Managed* wählen.
-4. **Site Key** → `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, **Secret Key** → `TURNSTILE_SECRET_KEY`, `TURNSTILE_ENABLED=true`.
+1. Cloudflare dashboard → **Turnstile** → *Add widget*.
+2. Enter the hostname(s) the dashboard is reachable at (e.g. `status.example.com`; add `localhost` for local tests).
+3. Choose widget mode *Managed*.
+4. **Site key** → `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, **secret key** → `TURNSTILE_SECRET_KEY`, `TURNSTILE_ENABLED=true`.
 
-Der Site Key wird zur **Laufzeit** aus der `.env` gelesen – ein Rebuild nach Änderung ist nicht nötig.
-Für Tests ohne echte Keys bietet Cloudflare Dummy-Keys an (Site `1x00000000000000000000AA`, Secret `1x0000000000000000000000000000000AA`).
+The site key is read from `.env` at **runtime**, so no rebuild is needed after changing it.
+For tests without real keys, Cloudflare provides dummy keys (site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`).
 
-**Passwort-Varianten:**
-- Nur Turnstile: `ACCESS_PASSWORD=` leer lassen, `TURNSTILE_ENABLED=true`
-- Nur Passwort: `ACCESS_PASSWORD=…`, `TURNSTILE_ENABLED=false`
-- Beides (empfohlen für externen Zugriff): beide setzen
+**Password options:**
+- Turnstile only: leave `ACCESS_PASSWORD=` empty, `TURNSTILE_ENABLED=true`
+- Password only: `ACCESS_PASSWORD=…`, `TURNSTILE_ENABLED=false`
+- Both (recommended for external access): set both
 
-## UniFi-Zugang
+## UniFi access
 
-**Empfohlen – API-Key (UniFi OS):** UniFi Network → *Einstellungen → Control Plane → Integrationen* → API-Key erstellen → `UNIFI_API_KEY`.
+**Recommended – API key (UniFi OS):** UniFi Network → *Settings → Control Plane → Integrations* → create an API key → `UNIFI_API_KEY`.
 
-**Alternativ – lokaler Benutzer:** Einen lokalen Read-Only-Admin anlegen und `UNIFI_USERNAME` / `UNIFI_PASSWORD` setzen. `UNIFI_CONTROLLER_TYPE=auto` probiert zuerst UniFi OS (`/api/auth/login`, CSRF aus `x-csrf-token`), dann den klassischen Controller (`/api/login`, Cookie `unifises` + `csrf_token`). Bei Ablauf der Session wird automatisch neu angemeldet.
+**Alternative – local user:** Create a local read-only admin and set `UNIFI_USERNAME` / `UNIFI_PASSWORD`. `UNIFI_CONTROLLER_TYPE=auto` tries UniFi OS first (`/api/auth/login`, CSRF from `x-csrf-token`), then the classic controller (`/api/login`, cookie `unifises` + `csrf_token`). When the session expires, it signs in again automatically.
 
-**Multi-Site:** `UNIFI_SITE_ID=default,filiale` oder `UNIFI_SITE_ID=*` (alle Sites des Controllers). Auswahl im Header-Dropdown.
+**Multi-site:** `UNIFI_SITE_ID=default,branch` or `UNIFI_SITE_ID=*` (all sites of the controller). Selected in the header drop-down.
 
-**Demo ohne Controller:** `UNIFI_MOCK=true` liefert simulierte Daten (2 Sites, Switche, APs, VLANs).
+**Demo without a controller:** `UNIFI_MOCK=true` provides simulated data (2 sites, switches, APs, VLANs).
 
-## Admin-Anleitung (`/admin`)
+## Admin guide (`/admin`)
 
-Der Admin-Bereich ist wie die macOS-Systemeinstellungen aufgebaut: links eine Seitenleiste mit **Standort** und den Bereichen *Netzwerke*, *Geräte*, *Statusseiten*, *Benutzer*, *Voucher* und *Allgemein* (auf dem Handy als Listen-Navigation). Die Adresse merkt sich den Bereich (`/admin?bereich=geraete`). Gruppen, Seiten und Konten werden per Klick in einem eigenen Fenster bearbeitet (Abbrechen / Sichern, Löschen unten).
+The admin area is laid out like macOS System Settings: a sidebar on the left with the **site** and the sections *Networks*, *Devices*, *Status pages*, *Users*, *Vouchers* and *General* (a list navigation on phones). The address remembers the section (`/admin?section=devices`; old German links such as `?bereich=geraete` still work). Groups, pages and accounts are edited in their own sheet (Cancel / Save, Delete at the bottom).
 
-1. Im Dashboard oben rechts auf das **Zahnrad** klicken und mit `ADMIN_PASSWORD` anmelden.
-2. **Standort** oben in der Seitenleiste wählen – die Netzwerke/VLANs werden live aus `rest/networkconf` geladen.
-3. **Netzwerke → + Gruppe** (z. B. „Gäste & Nachbarn“): Farbe wählen und per Häkchen beliebig viele Netzwerke zuordnen. Ein Netzwerk gehört immer zu höchstens einer Gruppe – wird es einer neuen Gruppe zugewiesen, wird es aus der alten verschoben.
-4. **Darstellung** je Gruppe:
-   - *Zusammengefasst:* eine Karte mit summierten Clients (LAN/WLAN), kombiniertem Traffic und gemeinsamem Verlaufsgraph. Klick öffnet den Drill-Down mit VLAN-Aufschlüsselung und Top-Clients.
-   - *Einzeln je VLAN:* Gruppen-Überschrift mit Summen, darunter je VLAN eine eigene Karte.
-5. **Reihenfolge ändern** (Link über der Gruppenliste) – bestimmt die Anordnung auf dem Dashboard.
-6. **Datenschutz:** *Hostnamen anonymisieren* ersetzt Hostnamen/IP/MAC der Clients (z. B. Gäste-VLAN) durch „Client n“. *Auf dem Dashboard anzeigen* aus blendet die Gruppe aus.
-7. **Alle Netzwerke:** Einzelne VLANs ausblenden (*Anzeigen*) oder anonymisieren (*Anonym*); *„Netzwerke ohne Gruppe anzeigen“* steuert, ob ungruppierte Netzwerke als Einzelkarten erscheinen.
-8. **Geräte:** Switche und APs (Name · Modell · MAC, mit Suche) zu Gruppen wie „Rack Keller“ oder „Außenbereich“ zusammenfassen. Die Zuordnung erfolgt über die MAC-Adresse und bleibt bei Umbenennungen erhalten. Gruppen lassen sich sortieren und ausblenden; nicht gruppierte Geräte erscheinen als „Weitere Switche“ / „Weitere Access Points“ (abschaltbar).
-9. **Allgemein:** Zustand von Controller und Datenbank, Daten neu laden, „Admin beenden“ und Abmelden.
+1. In the dashboard, click the **gear icon** at the top right and sign in with `ADMIN_PASSWORD`.
+2. Choose the **site** at the top of the sidebar; networks/VLANs are loaded live from `rest/networkconf`.
+3. **Networks → + Group** (e.g. "Guests & neighbours"): pick a colour and tick any number of networks. A network belongs to at most one group; assigning it to a new group moves it out of the old one.
+4. **Display** per group:
+   - *Combined:* one card with summed clients (LAN/Wi-Fi), combined traffic and a shared history chart. A click opens the drill-down with a VLAN breakdown and top clients.
+   - *Individual per VLAN:* a group heading with totals, followed by one card per VLAN.
+5. **Change order** (link above the group list) sets the order on the dashboard.
+6. **Privacy:** *Anonymise host names* replaces host name/IP/MAC of the clients (e.g. guest VLAN) with "Client n". Turning off *Show on the dashboard* hides the group.
+7. **All networks:** hide (*Show*) or anonymise (*Anonymous*) individual VLANs; *Show networks without a group* controls whether ungrouped networks appear as individual cards.
+8. **Devices:** combine switches and APs (name · model · MAC, with search) into groups such as "Basement rack" or "Outdoor". Devices are assigned by MAC address, so the assignment survives renaming. Groups can be sorted and hidden; ungrouped devices appear as "More switches" / "More access points" (can be switched off).
+9. **General:** controller and database health, reload data, interface language and default language for visitors, "Leave admin mode" and sign out.
 
-Alle Einstellungen liegen in `data/dashboard.db` (SQLite, WAL-Modus). Ist das Verzeichnis nicht beschreibbar, läuft das Dashboard mit einer In-Memory-Datenbank weiter, der Admin-Bereich zeigt eine Warnung und das Log nennt Pfad und UID.
+All settings are stored in `data/dashboard.db` (SQLite, WAL mode). If the directory is not writable, the dashboard keeps running with an in-memory database; the admin area shows a warning and the log names the path and UID.
 
-## Statusseiten & Benutzer
+## Status pages & users
 
-Im Admin-Bereich unter **Statusseiten** legst du Seiten mit eigener Adresse (`/s/gebaeude-a`) an und wählst dafür VLAN-Gruppen, Geräte-Gruppen und optional den WAN-Durchsatz. Auch im Hauptdashboard verborgene Gruppen können auf einer Statusseite erscheinen. Eine Seite kann **öffentlich** geschaltet werden (ohne Login und ohne Turnstile, z. B. für einen Wandmonitor; MACs und WAN-IP bleiben maskiert).
+Under **Status pages** in the admin area you create pages with their own address (`/s/building-a`) and choose VLAN groups, device groups and optionally the WAN throughput for them. Groups hidden on the main dashboard can still appear on a status page. A page can be made **public** (no login and no Turnstile, e.g. for a wall display; MACs and WAN IP stay masked).
 
-Unter **Benutzer** legst du Konten an und gibst ihnen eine oder mehrere Statusseiten frei. Nach dem Login landet ein Betrachter direkt auf seiner Seite (bei mehreren auf einer Übersicht unter `/start`). Voucher, Hardware-Gesamtansicht und Admin bleiben gesperrt.
+Under **Users** you create accounts and share one or more status pages with them. After signing in, a viewer lands directly on their page (or on an overview at `/start` if they have several). Vouchers, the full hardware view and admin remain locked.
 
-## Gäste-WLAN-Voucher (Admin → Voucher)
+## Guest Wi-Fi vouchers (Admin → Vouchers)
 
-Ausstellung von UniFi-Hotspot-Vouchern direkt im Dashboard – funktional angelehnt an [glenndehaan/unifi-voucher-site](https://github.com/glenndehaan/unifi-voucher-site) (MIT-Lizenz, © Glenn de Haan), hier nativ neu implementiert. Nur für Admins, im Admin-Bereich unter **Voucher** (Tab „Voucher“ im Dashboard-Header führt dorthin; alte Links auf `/vouchers` werden weitergeleitet).
+Issue UniFi hotspot vouchers directly in the dashboard. Functionally modelled on [glenndehaan/unifi-voucher-site](https://github.com/glenndehaan/unifi-voucher-site) (MIT licence, © Glenn de Haan), re-implemented natively here. Admins only, in the admin area under **Vouchers** (the "Vouchers" tab in the dashboard header leads there; old links to `/vouchers` are redirected).
 
-- **Erstellen:** Vorlagen aus `VOUCHER_PRESETS` oder benutzerdefiniert (Gültigkeit, einmalig / n Geräte / unbegrenzt, Down-/Upload-Limit, Datenvolumen), Anzahl (Stapel) und Notiz. Die neuen Codes werden sofort angezeigt (Klick = kopieren).
-- **Liste:** Status (Unbenutzt / Aktiv / Abgelaufen), Nutzung, Limits, Notiz, verbundene Gastgeräte (`stat/guest`), Ablaufzeit; Filter und Suche nach Code, Notiz oder Gerät.
-- **Widerrufen:** einzeln, Mehrfachauswahl oder „Abgelaufene entfernen“.
-- **Drucken:** `/vouchers/print` als A4-Kartenbogen oder 80-mm-Bon (Thermodrucker), mit WLAN-QR-Code (`VOUCHER_WIFI_SSID`, optional `VOUCHER_WIFI_PASSWORD`). „Als PDF speichern“ im Druckdialog ersetzt den PDF-/Mail-Versand.
-- **Endpunkte:** `POST cmd/hotspot` (`create-voucher`, `delete-voucher`), `GET stat/voucher`, `GET stat/guest`.
+- **Create:** presets from `VOUCHER_PRESETS` or custom (validity, single use / n devices / unlimited, download/upload limit, data volume), count (batch) and note. The new codes are shown immediately (click = copy).
+- **List:** state (unused / active / expired), usage, limits, note, connected guest devices (`stat/guest`), expiry; filter and search by code, note or device.
+- **Revoke:** individually, by multi-select or "Remove expired".
+- **Print:** `/vouchers/print` as an A4 card sheet or 80 mm receipt (thermal printer), with a Wi-Fi QR code (`VOUCHER_WIFI_SSID`, optionally `VOUCHER_WIFI_PASSWORD`) and a language selector (English / German). "Save as PDF" in the print dialog replaces sending a PDF by email.
+- **Endpoints:** `POST cmd/hotspot` (`create-voucher`, `delete-voucher`), `GET stat/voucher`, `GET stat/guest`.
 
-> **Wichtig:** Das Erstellen/Löschen braucht Schreibrechte. Ein Read-Only-Benutzer bzw. Read-Only-API-Key kann Voucher nur anzeigen. Für Voucher einen Benutzer mit Hotspot-/Site-Admin-Rechten verwenden.
+> **Important:** Creating/deleting needs write access. A read-only user or read-only API key can only view vouchers. Use a user with hotspot/site admin rights for vouchers.
 
-## Lokales Deployment mit Podman
+## Local deployment with Podman
 
-Voraussetzungen: Podman ≥ 4.3 und `podman-compose` (oder `podman compose`).
+Requirements: Podman ≥ 4.3 and `podman-compose` (or `podman compose`).
 
 ```bash
 git clone https://github.com/irqnet/unifi-dashboard.git
 cd unifi-dashboard
 
 cp .env.example .env
-# Secret erzeugen und in .env eintragen:
+# Generate a secret and put it into .env:
 openssl rand -base64 48
 nano .env
 
 mkdir -p data
-podman-compose up -d --build        # oder: podman compose up -d --build
+podman-compose up -d --build        # or: podman compose up -d --build
 podman-compose logs -f
 ```
 
-Das Dashboard ist danach unter **`http://<host>:3004`** erreichbar (Port-Mapping `3004:3000` in `compose.yaml`).
+The dashboard is then reachable at **`http://<host>:3004`** (port mapping `3004:3000` in `compose.yaml`).
 
-**Wichtig – HTTPS & Cookies:** Das Session-Cookie ist standardmäßig `Secure` und wird von Browsern nur über HTTPS (oder `localhost`) gespeichert. Für den externen Zugriff das Dashboard hinter einen TLS-Reverse-Proxy bzw. Cloudflare Tunnel stellen (Ziel `http://<host>:3004`). Nur für einen Test im LAN per `http://IP:3004` vorübergehend `COOKIE_SECURE=false` setzen.
+**Important – HTTPS & cookies:** The session cookie is `Secure` by default and browsers only store it over HTTPS (or `localhost`). For external access, put the dashboard behind a TLS reverse proxy or Cloudflare Tunnel (target `http://<host>:3004`). Only for a quick LAN test via `http://IP:3004`, temporarily set `COOKIE_SECURE=false`.
 
-**Container-Details**
-- Multi-Stage-Build auf `node:20-alpine`; `python3`, `make`, `g++` nur in der Build-Stage für `better-sqlite3`.
-- Läuft als Non-Root-User `node` (UID 1000), `read_only: true` mit `tmpfs` für `/tmp` und `/app/.next/cache`, `cap_drop: ALL`, `no-new-privileges`.
-- Persistentes Volume `./data:/app/data:Z` (SELinux-Label). Mit `USERNS_MODE=keep-id:uid=1000,gid=1000` wird der Host-Benutzer im Rootless-Podman auf UID 1000 abgebildet, sodass `./data` ohne `chown` beschreibbar ist.
-  Alternative (ohne keep-id): `podman unshare chown 1000:1000 data`.
-- Healthcheck gegen `/api/health` (in `compose.yaml`; der `HEALTHCHECK` im Dockerfile greift bei Podman nur mit `--format docker`).
-- `extra_hosts: unifi.local:host-gateway` als Beispiel, um den Controller per Hostname anzusprechen.
+**Container details**
+- Multi-stage build on `node:20-alpine`; `python3`, `make`, `g++` only in the build stage for `better-sqlite3`.
+- Runs as the non-root user `node` (UID 1000), `read_only: true` with `tmpfs` for `/tmp` and `/app/.next/cache`, `cap_drop: ALL`, `no-new-privileges`.
+- Persistent volume `./data:/app/data:Z` (SELinux label). With `USERNS_MODE=keep-id:uid=1000,gid=1000` the host user is mapped to UID 1000 in rootless Podman, so `./data` is writable without `chown`.
+  Alternative (without keep-id): `podman unshare chown 1000:1000 data`.
+- Health check against `/api/health` (in `compose.yaml`; the `HEALTHCHECK` in the Dockerfile only applies in Podman with `--format docker`).
+- `extra_hosts: unifi.local:host-gateway` as an example of reaching the controller by host name.
 
 **Update:**
 ```bash
 git pull && podman-compose up -d --build
 ```
 
-**Stack-Manager (Portainer, Dockge, Komodo, Arcane …):** Eine `.env`-Datei ist optional (`env_file … required: false`). Alle Variablen werden zusätzlich über den `environment:`-Block per `${VAR}`-Interpolation übernommen – es reicht also, die Variablen im Stack-UI zu hinterlegen. Zusätzliche Compose-Variablen:
+**Stack managers (Portainer, Dockge, Komodo, Arcane …):** An `.env` file is optional (`env_file … required: false`). All variables are also passed through the `environment:` block via `${VAR}` interpolation, so it is enough to set the variables in the stack UI. Additional compose variables:
 
-| Variable | Standard | Zweck |
+| Variable | Default | Purpose |
 |---|---|---|
-| `HOST_PORT` | `3004` | externer Port |
-| `DATA_PATH` | `./data` | Host-Pfad für die SQLite-DB, oder `unifi-dashboard-data` für das benannte Volume (Rechte automatisch korrekt) |
-| `USERNS_MODE` | leer | Rootless Podman: `keep-id:uid=1000,gid=1000` |
+| `HOST_PORT` | `3004` | external port |
+| `DATA_PATH` | `./data` | host path for the SQLite DB, or `unifi-dashboard-data` for the named volume (permissions set automatically) |
+| `USERNS_MODE` | empty | rootless Podman: `keep-id:uid=1000,gid=1000` |
 
-**Docker statt Podman:** Am einfachsten `DATA_PATH=unifi-dashboard-data` setzen (benanntes Volume). Alternativ muss das Datenverzeichnis für UID 1000 beschreibbar sein: `mkdir -p data && sudo chown 1000:1000 data` (bzw. für den unter `DATA_PATH` gesetzten Pfad).
+**Docker instead of Podman:** The easiest option is `DATA_PATH=unifi-dashboard-data` (named volume). Otherwise the data directory must be writable for UID 1000: `mkdir -p data && sudo chown 1000:1000 data` (or the path set in `DATA_PATH`).
 
-## Entwicklung
+## Development
 
 ```bash
 npm install
-cp .env.example .env    # UNIFI_MOCK=true, COOKIE_SECURE=false, SESSION_SECRET setzen
+cp .env.example .env    # set UNIFI_MOCK=true, COOKIE_SECURE=false, SESSION_SECRET
 npm run dev             # http://localhost:3000
-npm run build           # Produktions-Build (standalone)
-npm run typecheck
+npm run build           # production build (standalone)
+npm run typecheck       # also catches missing German translations
 ```
 
-## Konfiguration (Übersicht)
+## Configuration (overview)
 
-| Variable | Standard | Beschreibung |
+| Variable | Default | Description |
 |---|---|---|
-| `UNIFI_CONTROLLER_URL` | – | z. B. `https://192.168.1.1` |
-| `UNIFI_SITE_ID` | `default` | eine/mehrere Sites, kommagetrennt, oder `*` |
-| `UNIFI_API_KEY` | – | API-Key (UniFi OS) |
-| `UNIFI_USERNAME` / `UNIFI_PASSWORD` | – | Alternative zum API-Key |
+| `UNIFI_CONTROLLER_URL` | – | e.g. `https://192.168.1.1` |
+| `UNIFI_SITE_ID` | `default` | one or more sites, comma-separated, or `*` |
+| `UNIFI_API_KEY` | – | API key (UniFi OS) |
+| `UNIFI_USERNAME` / `UNIFI_PASSWORD` | – | alternative to the API key |
 | `UNIFI_CONTROLLER_TYPE` | `auto` | `auto` / `unifios` / `classic` |
-| `UNIFI_VERIFY_SSL` | `true` | `false` für Self-Signed-Zertifikate |
-| `POLLING_INTERVAL_MS` | `5000` | Backend-Pollintervall |
-| `HISTORY_MINUTES` | `30` | Länge des Verlaufs-Ringpuffers |
-| `UNIFI_MOCK` | `false` | Demo-Daten |
-| `WAN_BANDWIDTH_DOWN_MBPS` / `WAN_BANDWIDTH_UP_MBPS` | – | Fallback-Bandbreite für die WAN-Auslastung, falls in UniFi keine „Expected ISP Speeds“ für das aktive WAN hinterlegt sind (danach: letzter Speedtest, Spitzenwert) |
-| `ACCESS_PASSWORD` | – | Zugangspasswort (leer = nur Turnstile) |
-| `TURNSTILE_ENABLED` | `false` | Turnstile aktivieren |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | – | Turnstile Site Key (Laufzeit) |
-| `TURNSTILE_SECRET_KEY` | – | Turnstile Secret Key |
-| `ADMIN_PASSWORD` | – | Passwort für `/admin` |
-| `SESSION_SECRET` | – | ≥ 32 Zeichen, JWT-Signatur |
-| `SESSION_TTL_HOURS` | `12` | Gültigkeit der Session |
-| `COOKIE_SECURE` | `true` | `Secure`-Flag des Cookies |
-| `HIDE_SENSITIVE_IPS` | `true` | WAN-IP & Client-MACs für Nicht-Admins maskieren |
-| `DATA_DIR` | `./data` (Container: `/app/data`) | Speicherort der SQLite-DB |
-| `VOUCHER_PRESETS` | `Tagespass=1440,1,,,;…` | Voucher-Vorlagen `Name=Minuten,Nutzungen,Up kbit/s,Down kbit/s,MB;` (Name optional, Format kompatibel zu `VOUCHER_TYPES` der unifi-voucher-site) |
-| `VOUCHER_WIFI_SSID` | – | SSID des Gäste-WLANs für Ausdruck und QR-Code |
-| `VOUCHER_WIFI_PASSWORD` | – | WPA-Passwort des Gäste-WLANs (leer = offenes Netz mit Portal) |
-| `VOUCHER_NOTE_REQUIRED` | `false` | Notiz beim Erstellen erzwingen |
-| `VOUCHER_MAX_BATCH` | `100` | Max. Voucher pro Erstellvorgang |
+| `UNIFI_VERIFY_SSL` | `true` | `false` for self-signed certificates |
+| `POLLING_INTERVAL_MS` | `5000` | backend polling interval |
+| `HISTORY_MINUTES` | `30` | length of the history ring buffer |
+| `UNIFI_MOCK` | `false` | demo data |
+| `WAN_BANDWIDTH_DOWN_MBPS` / `WAN_BANDWIDTH_UP_MBPS` | – | fallback bandwidth for WAN utilisation if no "Expected ISP Speeds" are set in UniFi for the active WAN (after that: last speed test, peak value) |
+| `ACCESS_PASSWORD` | – | access password (empty = Turnstile only) |
+| `TURNSTILE_ENABLED` | `false` | enable Turnstile |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | – | Turnstile site key (runtime) |
+| `TURNSTILE_SECRET_KEY` | – | Turnstile secret key |
+| `ADMIN_PASSWORD` | – | password for `/admin` |
+| `SESSION_SECRET` | – | ≥ 32 characters, JWT signature |
+| `SESSION_TTL_HOURS` | `12` | session lifetime |
+| `COOKIE_SECURE` | `true` | `Secure` flag of the cookie |
+| `HIDE_SENSITIVE_IPS` | `true` | mask WAN IP & client MACs for non-admins |
+| `DATA_DIR` | `./data` (container: `/app/data`) | location of the SQLite DB |
+| `VOUCHER_PRESETS` | `1440,1,,,;4320,1,,,;10080,3,,,` | voucher presets `Name=minutes,uses,up kbit/s,down kbit/s,MB;` (name optional; without a name the label is generated in the interface language; format compatible with `VOUCHER_TYPES` of unifi-voucher-site) |
+| `VOUCHER_WIFI_SSID` | – | SSID of the guest Wi-Fi for the printout and QR code |
+| `VOUCHER_WIFI_PASSWORD` | – | WPA password of the guest Wi-Fi (empty = open network with portal) |
+| `VOUCHER_NOTE_REQUIRED` | `false` | require a note when creating |
+| `VOUCHER_MAX_BATCH` | `100` | max. vouchers per creation |
 
 ## API (BFF)
 
-| Methode | Pfad | Rolle | Zweck |
+| Method | Path | Role | Purpose |
 |---|---|---|---|
-| `POST` | `/api/auth/verify` | – | Gate: Turnstile + Benutzerkonto (⇒ user/admin) oder Zugangspasswort (⇒ viewer) |
-| `GET` | `/api/status/:adresse` | siehe oben | Daten einer Statusseite (nur deren Gruppen) |
-| `POST` / `DELETE` | `/api/auth/admin` | Session | Admin-Upgrade / zurück auf viewer |
-| `POST` | `/api/auth/logout` | – | Session löschen |
-| `GET` | `/api/health` | – | Health-Check |
-| `GET` | `/api/unifi/sites` | viewer | Konfigurierte Sites |
-| `GET` | `/api/unifi/dashboard?site=` | viewer | Aggregierte Dashboard-Daten inkl. Verlauf |
-| `GET` / `PUT` | `/api/admin/networks` | admin | Live-Netzwerke + Sichtbarkeit/Anonymisierung |
-| `GET` / `POST` | `/api/admin/groups` | admin | Gruppen lesen/anlegen |
-| `PUT` / `DELETE` | `/api/admin/groups/:id` | admin | Gruppe ändern/löschen |
-| `PUT` | `/api/admin/groups/order` | admin | Reihenfolge setzen |
-| `GET` | `/api/admin/devices` | admin | Live-Switche/APs inkl. Gruppenzuordnung |
-| `GET` / `POST` | `/api/admin/device-groups` | admin | Geräte-Gruppen lesen/anlegen |
-| `PUT` / `DELETE` | `/api/admin/device-groups/:id` | admin | Geräte-Gruppe ändern/löschen |
-| `PUT` | `/api/admin/device-groups/order` | admin | Reihenfolge der Geräte-Gruppen |
-| `GET` / `PUT` | `/api/admin/settings` | admin | Globale Einstellungen |
-| `GET` / `POST` | `/api/admin/status-pages` | admin | Statusseiten lesen/anlegen |
-| `PUT` / `DELETE` | `/api/admin/status-pages/:id` | admin | Statusseite ändern/löschen |
-| `GET` / `POST` | `/api/admin/users` | admin | Benutzer lesen/anlegen |
-| `PUT` / `DELETE` | `/api/admin/users/:id` | admin | Benutzer ändern/löschen |
-| `GET` / `POST` | `/api/admin/vouchers?site=` | admin | Voucher + Vorlagen lesen / Voucher erstellen |
-| `POST` | `/api/admin/vouchers/delete` | admin | Voucher widerrufen (`{ site, ids }`) |
+| `POST` | `/api/auth/verify` | – | gate: Turnstile + user account (⇒ user/admin) or access password (⇒ viewer) |
+| `GET` | `/api/status/:address` | see above | data of a status page (its groups only) |
+| `POST` / `DELETE` | `/api/auth/admin` | session | admin upgrade / back to viewer |
+| `POST` | `/api/auth/logout` | – | delete the session |
+| `POST` | `/api/locale` | – | set the interface language (`{ locale: "en" \| "de" }`; also saved to the account when signed in) |
+| `GET` | `/api/health` | – | health check |
+| `GET` | `/api/unifi/sites` | viewer | configured sites |
+| `GET` | `/api/unifi/dashboard?site=` | viewer | aggregated dashboard data incl. history |
+| `GET` / `PUT` | `/api/admin/networks` | admin | live networks + visibility/anonymisation |
+| `GET` / `POST` | `/api/admin/groups` | admin | read/create groups |
+| `PUT` / `DELETE` | `/api/admin/groups/:id` | admin | update/delete a group |
+| `PUT` | `/api/admin/groups/order` | admin | set the order |
+| `GET` | `/api/admin/devices` | admin | live switches/APs incl. group assignment |
+| `GET` / `POST` | `/api/admin/device-groups` | admin | read/create device groups |
+| `PUT` / `DELETE` | `/api/admin/device-groups/:id` | admin | update/delete a device group |
+| `PUT` | `/api/admin/device-groups/order` | admin | order of the device groups |
+| `GET` / `PUT` | `/api/admin/settings` | admin | global settings (incl. `defaultLanguage`) |
+| `GET` / `POST` | `/api/admin/status-pages` | admin | read/create status pages |
+| `PUT` / `DELETE` | `/api/admin/status-pages/:id` | admin | update/delete a status page |
+| `GET` / `POST` | `/api/admin/users` | admin | read/create users |
+| `PUT` / `DELETE` | `/api/admin/users/:id` | admin | update/delete a user |
+| `GET` / `POST` | `/api/admin/vouchers?site=` | admin | read vouchers + presets / create vouchers |
+| `POST` | `/api/admin/vouchers/delete` | admin | revoke vouchers (`{ site, ids }`) |
+
+API error messages follow the caller's language (account, cookie or `Accept-Language`).

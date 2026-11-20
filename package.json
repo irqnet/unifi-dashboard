@@ -2,7 +2,7 @@
   "name": "unifi-dashboard",
   "version": "1.0.0",
   "private": true,
-  "description": "UniFi Network Status- & Monitoring-Dashboard mit Passwort-/Turnstile-Gate, Admin-Bereich und VLAN-Gruppierung",
+  "description": "UniFi network status & monitoring dashboard with password/Turnstile gate, admin area and VLAN grouping (English / German)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

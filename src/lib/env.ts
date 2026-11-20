@@ -1,7 +1,7 @@
 /**
- * Zentrale, serverseitige Konfiguration aus Umgebungsvariablen.
- * Werte werden bei jedem Aufruf frisch gelesen, damit ein lokal gebautes
- * Image ohne Rebuild über die .env konfiguriert werden kann.
+ * Central server-side configuration from environment variables.
+ * Values are read fresh on every call so a locally built image can be
+ * configured via .env without a rebuild.
  */
 
 function str(name: string, fallback = ''): string {
@@ -29,7 +29,7 @@ export function getConfig() {
   return {
     unifi: {
       url: str('UNIFI_CONTROLLER_URL').replace(/\/+$/, ''),
-      /** Konfigurierte Sites. "*" = alle Sites des Controllers automatisch erkennen. */
+      /** Configured sites. "*" = discover all sites of the controller automatically. */
       sites: sites.length ? sites : ['default'],
       apiKey: str('UNIFI_API_KEY'),
       username: str('UNIFI_USERNAME'),
@@ -43,30 +43,30 @@ export function getConfig() {
     pollingIntervalMs: int('POLLING_INTERVAL_MS', 5000, 1000),
     historyMinutes: int('HISTORY_MINUTES', 30, 5),
     hideSensitiveIps: bool('HIDE_SENSITIVE_IPS', true),
-    /** Fallback-Bandbreite in Mbit/s, wenn UniFi keine Expected ISP Speeds liefert */
+    /** Fallback bandwidth in Mbit/s when UniFi provides no expected ISP speeds */
     wanDownMbps: int('WAN_BANDWIDTH_DOWN_MBPS', 0),
     wanUpMbps: int('WAN_BANDWIDTH_UP_MBPS', 0),
     dataDir: str('DATA_DIR', './data'),
     vouchers: {
-      /** Vorlagen: "Name=Minuten,Nutzungen,Upload kbps,Download kbps,MB;…" (Name optional) */
-      presets: str('VOUCHER_PRESETS', 'Tagespass=1440,1,,,;Wochenende=4320,1,,,;Woche (3 Geräte)=10080,3,,,'),
-      /** SSID des Gäste-WLANs – erscheint auf dem Ausdruck und im QR-Code */
+      /** Presets: "Name=minutes,uses,upload kbps,download kbps,MB;…" (name optional; without a name the label is generated in the UI language) */
+      presets: str('VOUCHER_PRESETS', '1440,1,,,;4320,1,,,;10080,3,,,'),
+      /** SSID of the guest Wi-Fi – appears on the printout and in the QR code */
       ssid: str('VOUCHER_WIFI_SSID'),
-      /** WPA-Passwort des Gäste-WLANs (leer = offenes Netz mit Hotspot-Portal) */
+      /** WPA password of the guest Wi-Fi (empty = open network with hotspot portal) */
       wifiPassword: str('VOUCHER_WIFI_PASSWORD'),
-      /** Notiz beim Erstellen verpflichtend */
+      /** Note is required when creating */
       noteRequired: bool('VOUCHER_NOTE_REQUIRED', false),
-      /** Maximale Anzahl Voucher pro Erstellvorgang */
+      /** Maximum number of vouchers per create operation */
       maxBatch: int('VOUCHER_MAX_BATCH', 100, 1),
     },
   };
 }
 
-/** Wird auch im Edge-Middleware-Kontext verwendet – daher keine Node-APIs. */
+/** Also used in the edge middleware context – hence no Node APIs. */
 export function getSessionSecret(): Uint8Array {
   const secret = process.env.SESSION_SECRET ?? '';
   if (secret.length < 32) {
-    throw new Error('SESSION_SECRET muss mindestens 32 Zeichen lang sein.');
+    throw new Error('SESSION_SECRET must be at least 32 characters long.');
   }
   return new TextEncoder().encode(secret);
 }
@@ -82,8 +82,8 @@ export function cookieSecure(): boolean {
 }
 
 export function getAuthConfig() {
-  // Dynamischer Zugriff verhindert, dass Next.js den NEXT_PUBLIC_-Wert zur Build-Zeit
-  // einbettet – so funktioniert die Konfiguration über die .env zur Laufzeit.
+  // Dynamic access prevents Next.js from inlining the NEXT_PUBLIC_ value at build time –
+  // so configuration via .env works at runtime.
   const pubKey = 'NEXT_PUBLIC_' + 'TURNSTILE_SITE_KEY';
   return {
     accessPassword: process.env.ACCESS_PASSWORD ?? '',
