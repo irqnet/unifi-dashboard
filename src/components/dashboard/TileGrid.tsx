@@ -30,6 +30,10 @@ export interface TileDef {
   h: number;
   /** Kennzahl: auf dem Handy in der wischbaren Leiste statt im Raster */
   kpi?: boolean;
+  /** Bereich, in dem die Kachel steht (eigenes Raster, nur innerhalb verschiebbar) */
+  section?: string;
+  /** Auf Handy und Tablet immer volle Breite (z. B. WAN-Kacheln nebeneinander nur am Desktop) */
+  fullBelowLg?: boolean;
   render: () => ReactNode;
 }
 
@@ -42,11 +46,11 @@ const collision: CollisionDetection = (args) => {
 const spanSm = (w: TileWidth) => Math.ceil(w / 2);
 const spanXs = (w: TileWidth) => (w >= 8 ? 2 : 1);
 
-function cellStyle(size: TileSize): CSSProperties {
+function cellStyle(size: TileSize, fullBelowLg?: boolean): CSSProperties {
   return {
     ['--span-lg' as string]: size.w,
-    ['--span-sm' as string]: spanSm(size.w),
-    ['--span-xs' as string]: spanXs(size.w),
+    ['--span-sm' as string]: fullBelowLg ? 6 : spanSm(size.w),
+    ['--span-xs' as string]: fullBelowLg ? 2 : spanXs(size.w),
     ['--rows' as string]: size.h,
   };
 }
@@ -56,14 +60,23 @@ function cellStyle(size: TileSize): CSSProperties {
  * Im Bearbeitungsmodus: ziehen zum Verschieben (Touch: lange drücken),
  * Ecke ziehen oder Größenmenü zum Skalieren, Auge zum Ausblenden.
  */
+export interface TileSection {
+  id: string;
+  /** Überschrift; ohne Titel steht der Bereich ohne Kopfzeile */
+  title?: string;
+}
+
 export function TileGrid({
   tiles,
+  sections,
   order,
   layout,
   editing,
   onChange,
 }: {
   tiles: TileDef[];
+  /** Bereiche in Anzeigereihenfolge; Kacheln ohne passenden Bereich landen im letzten */
+  sections?: TileSection[];
   /** Aufgelöste Reihenfolge aller Kachel-IDs */
   order: string[];
   layout: TileLayout;
@@ -74,7 +87,12 @@ export function TileGrid({
   const hidden = new Set(layout.hidden);
   const visible = order.filter((id) => byId.has(id) && !hidden.has(id));
   const sizeOf = (t: TileDef): TileSize => layout.size[t.id] ?? { w: t.w, h: t.h };
-  const gridRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const secs = sections?.length ? sections : [{ id: '' }];
+  const sectionOf = (id: string) => {
+    const sec = byId.get(id)?.section;
+    return secs.some((x) => x.id === sec) ? sec! : secs[secs.length - 1].id;
+  };
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeRect, setActiveRect] = useState<{ width: number; height: number } | null>(null);
 
@@ -93,7 +111,7 @@ export function TileGrid({
     const id = String(e.active.id);
     setActiveId(id);
     lastOver.current = null;
-    const el = gridRef.current?.querySelector<HTMLElement>(`[data-tile-id="${CSS.escape(id)}"]`);
+    const el = rootRef.current?.querySelector<HTMLElement>(`[data-tile-id="${CSS.escape(id)}"]`);
     const r = el?.getBoundingClientRect();
     setActiveRect(r ? { width: r.width, height: r.height } : null);
   };
@@ -102,6 +120,8 @@ export function TileGrid({
   const onDragOver = (e: DragOverEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id || lastOver.current === String(over.id)) return;
+    // Nur innerhalb des eigenen Bereichs verschieben
+    if (sectionOf(String(active.id)) !== sectionOf(String(over.id))) return;
     lastOver.current = String(over.id);
     const from = order.indexOf(String(active.id));
     const to = order.indexOf(String(over.id));
@@ -116,7 +136,7 @@ export function TileGrid({
   const active = activeId ? byId.get(activeId) : null;
 
   return (
-    <div>
+    <div ref={rootRef} className="space-y-4 sm:space-y-5">
       {/* Handy: Kennzahlen als wischbare Leiste */}
       {!editing && kpis.length > 0 && (
         <div className="no-scrollbar -mx-3 mb-2.5 flex snap-x scroll-px-3 gap-2 overflow-x-auto px-3 pb-1 sm:hidden">
@@ -128,24 +148,37 @@ export function TileGrid({
         </div>
       )}
       <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragEnd}>
-        <SortableContext items={visible} strategy={() => null}>
-          <div ref={gridRef} className="tile-grid">
-            {visible.map((id) => {
-              const t = byId.get(id)!;
-              return (
-                <SortableTile
-                  key={id}
-                  tile={t}
-                  size={sizeOf(t)}
-                  editing={editing}
-                  gridRef={gridRef}
-                  onSize={(s) => setSize(id, s)}
-                  onHide={() => hide(id)}
-                />
-              );
-            })}
-          </div>
-        </SortableContext>
+        {secs.map((sec) => {
+          const ids = visible.filter((id) => sectionOf(id) === sec.id);
+          if (!ids.length) return null;
+          // Bereich nur aus Kennzahlen: auf dem Handy steht er in der wischbaren Leiste
+          const onlyKpi = !editing && ids.every((id) => byId.get(id)!.kpi);
+          return (
+            <section key={sec.id} className={clsx(onlyKpi && 'max-sm:hidden')}>
+              {sec.title && <h2 className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wider text-noc-muted sm:mb-2.5">{sec.title}</h2>}
+              <SortableContext items={ids} strategy={() => null}>
+                <SectionGrid>
+                  {(gridRef) =>
+                    ids.map((id) => {
+                      const t = byId.get(id)!;
+                      return (
+                        <SortableTile
+                          key={id}
+                          tile={t}
+                          size={sizeOf(t)}
+                          editing={editing}
+                          gridRef={gridRef}
+                          onSize={(s) => setSize(id, s)}
+                          onHide={() => hide(id)}
+                        />
+                      );
+                    })
+                  }
+                </SectionGrid>
+              </SortableContext>
+            </section>
+          );
+        })}
         <DragOverlay dropAnimation={null}>
           {active && activeRect ? (
             <div
@@ -157,6 +190,15 @@ export function TileGrid({
           ) : null}
         </DragOverlay>
       </DndContext>
+    </div>
+  );
+}
+
+function SectionGrid({ children }: { children: (ref: React.RefObject<HTMLDivElement | null>) => ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={ref} className="tile-grid">
+      {children(ref)}
     </div>
   );
 }
@@ -229,7 +271,7 @@ function SortableTile({
         setNodeRef(el);
         cellRef.current = el;
       }}
-      style={{ ...cellStyle(size), transform: DndCSS.Translate.toString(transform) }}
+      style={{ ...cellStyle(size, tile.fullBelowLg), transform: DndCSS.Translate.toString(transform) }}
       className={clsx(
         'tile-cell group/tile relative @container',
         tile.kpi && !editing && 'max-sm:hidden',

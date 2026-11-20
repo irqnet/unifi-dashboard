@@ -192,6 +192,10 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
 
   const totalDown = clients.reduce((s, c) => s + (c['tx_bytes-r'] ?? c['wired-tx_bytes-r'] ?? 0), 0);
   const totalUp = clients.reduce((s, c) => s + (c['rx_bytes-r'] ?? c['wired-rx_bytes-r'] ?? 0), 0);
+  // Durchsatz je WAN-Anschluss (Lastverteilung: Großteil über WAN1)
+  const gwWan = devices[0];
+  if (gwWan.wan1) Object.assign(gwWan.wan1, { 'rx_bytes-r': totalDown * 0.85, 'tx_bytes-r': totalUp * 0.85 });
+  if (gwWan.wan2) Object.assign(gwWan.wan2, { 'rx_bytes-r': totalDown * 0.15, 'tx_bytes-r': totalUp * 0.15 });
   const health: RawHealth[] = [
     {
       subsystem: 'wan',

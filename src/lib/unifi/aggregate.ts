@@ -21,6 +21,7 @@ import type {
   SwitchView,
   SystemStatus,
   TrafficPoint,
+  WanLinkView,
   WanView,
 } from '../views';
 import { clientRates, getPoller, type Sample } from './poller';
@@ -110,6 +111,70 @@ function overallStatus(error: string | null, health: { subsystem: string; status
   if (health.some((h) => h.status === 'warning' || h.status === 'error')) return 'degraded';
   if (devices.some((d) => d.adopted !== false && d.state !== undefined && d.state !== 1)) return 'degraded';
   return health.length ? 'online' : 'unknown';
+}
+
+const wanKey = (n: RawNetwork) => (n.wan_networkgroup ?? 'WAN').toUpperCase();
+
+/**
+ * WAN-Anschlüsse einzeln. Bei nur einem Anschluss entspricht der Eintrag der Gesamtansicht.
+ * Liefert das Gateway keinen Durchsatz je Anschluss, bekommt der aktive WAN den Gesamtwert.
+ */
+function wanLinks(
+  networks: RawNetwork[],
+  gw: RawDevice | undefined,
+  activeNet: RawNetwork | undefined,
+  total: WanView,
+  samples: Sample[],
+  mask: boolean,
+): WanLinkView[] {
+  const nets = networks
+    .filter((n) => n.purpose === 'wan' && n.enabled !== false)
+    .sort((a, b) => wanKey(a).localeCompare(wanKey(b), 'en', { numeric: true }));
+  if (nets.length <= 1) {
+    const n = nets[0] ?? activeNet;
+    return [{ ...total, key: n ? wanKey(n) : 'WAN', name: n?.name || total.activeWan || 'WAN', isActive: true }];
+  }
+  const perLink = samples.some((s) => s.wans);
+  return nets.map((n) => {
+    const key = wanKey(n);
+    const isActive = n === activeNet;
+    const idx = key === 'WAN' ? 1 : Number(key.slice(3)) || 0;
+    const port = idx >= 1 && idx <= 3 ? gw?.[`wan${idx as 1 | 2 | 3}`] : undefined;
+    const pick = (s: Sample): [number, number] => (perLink ? (s.wans?.[key] ?? [0, 0]) : isActive ? [s.wanDown, s.wanUp] : [0, 0]);
+    const history = samples.map((s) => {
+      const [down, up] = pick(s);
+      return { t: s.t, down, up, clients: 0 };
+    });
+    const last = history[history.length - 1];
+    const caps = n.wan_provider_capabilities;
+    const expDown = num(caps?.download_kilobits_per_second);
+    const expUp = num(caps?.upload_kilobits_per_second);
+    const expectedDown = expDown && expDown > 0 ? expDown * 1000 : null;
+    const expectedUp = expUp && expUp > 0 ? expUp * 1000 : null;
+    const ip = port?.ip ?? null;
+    const status: WanView['status'] = port?.up === false ? 'offline' : port?.up === true ? 'online' : isActive ? total.status : 'unknown';
+    return {
+      ...total,
+      key,
+      name: n.name || key,
+      isActive,
+      status,
+      ip: mask ? maskIp(ip) : ip,
+      isp: isActive ? total.isp : null,
+      latency: isActive ? total.latency : null,
+      down: last?.down ?? 0,
+      up: last?.up ?? 0,
+      history,
+      ...(expectedDown
+        ? { capacityDown: expectedDown, capacityUp: expectedUp ?? expectedDown, capacitySource: 'isp' as const }
+        : isActive
+          ? {}
+          : { capacityDown: null, capacityUp: null, capacitySource: null }),
+      activeWan: n.name || key,
+      expectedDown,
+      expectedUp,
+    };
+  });
 }
 
 /**
@@ -396,6 +461,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
     expectedDown,
     expectedUp,
   };
+  const wans = wanLinks(data.networks, gwDev, activeWanNet, wan, samples, mask);
   const gateway: GatewayView = {
     name: gwDev?.name ?? wanH?.gw_name ?? null,
     model: gwDev?.model_name ?? gwDev?.model ?? null,
@@ -431,6 +497,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
       isAdmin: false,
       status: scopedStatus,
       wan: scope.page.showWan ? wan : EMPTY_WAN,
+      wans: scope.page.showWan ? wans : [],
       gateway: scope.page.showWan ? gateway : EMPTY_GATEWAY,
       totals: { ...allCounts, down: allRows.reduce((s, r) => s + r.down, 0), up: allRows.reduce((s, r) => s + r.up, 0) },
       groups: groupViews,
@@ -463,6 +530,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
     isAdmin,
     status: degradedByPartial && status === 'online' ? 'degraded' : status,
     wan,
+    wans,
     gateway,
     totals: {
       ...allCounts,
