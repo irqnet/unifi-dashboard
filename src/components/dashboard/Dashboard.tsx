@@ -164,13 +164,14 @@ export function Dashboard({
   const sections: TileSection[] | undefined = useMemo(() => {
     if (view === 'hardware') return undefined;
     const multi = (data?.wans?.length ?? 0) > 1;
+    const mode = data?.wans?.[0]?.mode;
     return [
       { id: 'kpi' },
-      { id: 'wan', title: multi ? 'WAN · Internetanbieter' : 'WAN' },
+      { id: 'wan', title: !multi ? 'WAN' : mode === 'failover' ? 'WAN · Failover' : mode === 'loadbalance' ? 'WAN · Loadbalancing' : 'WAN · Internetanbieter' },
       { id: 'net', title: 'Netzwerke' },
       ...(view === 'status' ? [{ id: 'hw', title: 'Hardware' }] : []),
     ];
-  }, [view, data?.wans?.length]);
+  }, [view, data?.wans]);
 
   const active = editing && draft ? draft : tl.layout;
   const order = useMemo(() => resolveOrder(tiles.map((t) => t.id), active), [tiles, active]);

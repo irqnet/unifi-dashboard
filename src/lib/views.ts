@@ -137,8 +137,14 @@ export interface WanLinkView extends WanView {
   key: string;
   /** Netzwerkname aus UniFi, z. B. „Internet 1“ */
   name: string;
-  /** Trägt gerade den Verkehr */
+  /** Trägt gerade den Verkehr (führende WAN laut Gateway) */
   isActive: boolean;
+  /** Multi-WAN-Modus aus der UniFi-Konfiguration, null wenn unbekannt */
+  mode: 'failover' | 'loadbalance' | null;
+  /** Anzeige-Status: aktiv, bereit (Failover-Reserve) oder offline */
+  role: 'active' | 'standby' | 'offline';
+  /** Anteil beim Loadbalancing in Prozent */
+  weight: number | null;
 }
 
 export interface GatewayView {

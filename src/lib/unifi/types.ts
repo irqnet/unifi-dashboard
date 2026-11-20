@@ -127,6 +127,10 @@ export interface RawNetwork {
   networkgroup?: string;
   /** WAN-Netzwerke: WAN, WAN2, … */
   wan_networkgroup?: string;
+  /** Multi-WAN: failover-only oder weighted (Loadbalancing) */
+  wan_load_balance_type?: string;
+  /** Gewicht beim Loadbalancing (1–99) */
+  wan_load_balance_weight?: number;
   /** „Expected ISP Speeds“ aus den WAN-Einstellungen */
   wan_provider_capabilities?: { download_kilobits_per_second?: number; upload_kilobits_per_second?: number };
 }

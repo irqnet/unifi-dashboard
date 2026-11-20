@@ -100,11 +100,14 @@ export function WanPanel({ wan, link }: { wan: WanView; link?: WanLinkView }) {
         </h2>
         {link ? (
           (() => {
-            const st = link.status === 'offline' ? STATE.offline : link.isActive || link.down + link.up > 0 ? STATE.active : STATE.standby;
+            const st = STATE[link.role];
             return (
               <span className="flex items-center gap-2 text-xs text-noc-muted">
                 <span className="hidden @md:inline">{link.key === 'WAN' ? 'WAN1' : link.key}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${st.cls}`}>{st.label}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${st.cls}`}>
+                  {st.label}
+                  {link.role === 'active' && link.weight !== null ? ` · ${link.weight} %` : ''}
+                </span>
               </span>
             );
           })()
