@@ -70,6 +70,8 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
       purpose: 'wan',
       wan_networkgroup: 'WAN',
       enabled: true,
+      wan_load_balance_type: 'weighted',
+      wan_load_balance_weight: 80,
       wan_provider_capabilities: { download_kilobits_per_second: 1_000_000, upload_kilobits_per_second: 500_000 },
     },
     {
@@ -78,6 +80,8 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
       purpose: 'wan',
       wan_networkgroup: 'WAN2',
       enabled: true,
+      wan_load_balance_type: 'weighted',
+      wan_load_balance_weight: 20,
       wan_provider_capabilities: { download_kilobits_per_second: 150_000, upload_kilobits_per_second: 50_000 },
     },
   );

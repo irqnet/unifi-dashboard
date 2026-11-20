@@ -132,10 +132,22 @@ function wanLinks(
     .sort((a, b) => wanKey(a).localeCompare(wanKey(b), 'en', { numeric: true }));
   if (nets.length <= 1) {
     const n = nets[0] ?? activeNet;
-    return [{ ...total, key: n ? wanKey(n) : 'WAN', name: n?.name || total.activeWan || 'WAN', isActive: true }];
+    return [
+      {
+        ...total,
+        key: n ? wanKey(n) : 'WAN',
+        name: n?.name || total.activeWan || 'WAN',
+        isActive: true,
+        mode: null,
+        role: total.status === 'offline' ? 'offline' : 'active',
+        weight: null,
+      },
+    ];
   }
   const perLink = samples.some((s) => s.wans);
-  return nets.map((n) => {
+  const types = nets.map((n) => n.wan_load_balance_type?.toLowerCase());
+  const mode: WanLinkView['mode'] = types.includes('weighted') ? 'loadbalance' : types.some((t) => t?.startsWith('failover')) ? 'failover' : null;
+  const links = nets.map((n) => {
     const key = wanKey(n);
     const isActive = n === activeNet;
     const idx = key === 'WAN' ? 1 : Number(key.slice(3)) || 0;
@@ -173,8 +185,28 @@ function wanLinks(
       activeWan: n.name || key,
       expectedDown,
       expectedUp,
+      mode,
+      role: (status === 'offline'
+        ? 'offline'
+        : mode === 'loadbalance'
+          ? 'active'
+          : mode === 'failover'
+            ? isActive
+              ? 'active'
+              : 'standby'
+            : isActive || (last?.down ?? 0) + (last?.up ?? 0) > 0
+              ? 'active'
+              : 'standby') as WanLinkView['role'],
+      weight: null as number | null,
+      rawWeight: n.wan_load_balance_type?.toLowerCase() === 'weighted' ? (num(n.wan_load_balance_weight) ?? null) : null,
     };
   });
+  // Anteil beim Loadbalancing: Gewicht relativ zu den übrigen aktiven Leitungen
+  if (mode === 'loadbalance') {
+    const sum = links.reduce((s, l) => s + (l.role === 'active' && l.rawWeight ? l.rawWeight : 0), 0);
+    for (const l of links) if (sum > 0 && l.role === 'active' && l.rawWeight) l.weight = Math.round((l.rawWeight / sum) * 100);
+  }
+  return links.map(({ rawWeight: _rw, ...l }) => l);
 }
 
 /**
