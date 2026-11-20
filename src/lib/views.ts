@@ -131,6 +131,16 @@ export interface WanView {
   expectedUp: number | null;
 }
 
+/** Ein einzelner WAN-Anschluss (bei Multi-WAN eine Kachel je Anbieter) */
+export interface WanLinkView extends WanView {
+  /** WAN-Gruppe aus UniFi: WAN, WAN2 … */
+  key: string;
+  /** Netzwerkname aus UniFi, z. B. „Internet 1“ */
+  name: string;
+  /** Trägt gerade den Verkehr */
+  isActive: boolean;
+}
+
 export interface GatewayView {
   name: string | null;
   model: string | null;
@@ -154,6 +164,8 @@ export interface DashboardPayload {
   isAdmin: boolean;
   status: SystemStatus;
   wan: WanView;
+  /** WAN-Anschlüsse einzeln (ein Eintrag bei nur einem Anbieter) */
+  wans: WanLinkView[];
   gateway: GatewayView;
   totals: ClientCounts & { down: number; up: number };
   groups: GroupView[];

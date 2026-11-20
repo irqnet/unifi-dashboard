@@ -17,6 +17,8 @@ export interface Sample {
   t: number;
   wanDown: number;
   wanUp: number;
+  /** Durchsatz je WAN-Anschluss (Schlüssel WAN, WAN2 …), sofern das Gateway ihn liefert */
+  wans?: Record<string, [number, number]>;
   nets: Record<string, NetSample>;
 }
 
@@ -200,10 +202,19 @@ class Poller {
         if (c.is_wired) s[3] += 1;
       }
       const wan = data.health.find((h) => h.subsystem === 'wan');
+      const gw = data.devices.find((d) => ['ugw', 'udm', 'uxg'].includes(d.type));
+      const wans: Record<string, [number, number]> = {};
+      ([1, 2, 3] as const).forEach((i) => {
+        const port = gw?.[`wan${i}`];
+        if (port && (port['rx_bytes-r'] !== undefined || port['tx_bytes-r'] !== undefined)) {
+          wans[i === 1 ? 'WAN' : `WAN${i}`] = [(port['rx_bytes-r'] ?? 0) * 8, (port['tx_bytes-r'] ?? 0) * 8];
+        }
+      });
       st.history.push({
         t: Date.now(),
         wanDown: (wan?.['rx_bytes-r'] ?? 0) * 8,
         wanUp: (wan?.['tx_bytes-r'] ?? 0) * 8,
+        ...(Object.keys(wans).length ? { wans } : {}),
         nets,
       });
       st.data = data;

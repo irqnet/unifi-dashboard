@@ -10,7 +10,7 @@ import { EditBar } from './EditBar';
 import { HardwareEmpty, hardwareTiles, hasHardware } from './HardwareSection';
 import { kpiTiles } from './KpiTiles';
 import { networkTiles, type DetailTarget } from './NetworkCards';
-import { TileGrid, type TileDef } from './TileGrid';
+import { TileGrid, type TileDef, type TileSection } from './TileGrid';
 import { useTileLayout } from './useTileLayout';
 import { WanPanel } from './WanPanel';
 
@@ -134,15 +134,43 @@ export function Dashboard({
 
   const tiles: TileDef[] = useMemo(() => {
     if (!data) return [];
-    const wan: TileDef = { id: 'wan', title: 'WAN-Durchsatz', w: 8, h: 2, render: () => <WanPanel data={data} /> };
+    const kpis = kpiTiles(data).map((t) => ({ ...t, section: 'kpi' }));
+    // WAN-Bereich: eine Kachel je Internetanbieter, nebeneinander
+    const links = data.wans ?? [];
+    const wanW = links.length >= 3 ? 4 : links.length === 2 ? 6 : 12;
+    const wans: TileDef[] = links.map((l) => ({
+      id: `wan:${l.key}`,
+      title: links.length > 1 ? `WAN ${l.name}` : 'WAN-Durchsatz',
+      w: wanW,
+      h: 2,
+      section: 'wan',
+      fullBelowLg: true,
+      render: () => <WanPanel wan={data.wan} link={links.length > 1 ? l : undefined} />,
+    }));
+    const inNet = (t: TileDef): TileDef => ({ ...t, section: 'net' });
     if (view === 'network') {
-      return [...kpiTiles(data), wan, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open })];
+      return [...kpis, ...wans, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open }).map(inNet)];
     }
-    if (view === 'hardware') return [...kpiTiles(data), ...hardwareTiles(data)];
+    if (view === 'hardware') return [...kpis, ...hardwareTiles(data)];
     const showWan = !!data.statusPage?.showWan;
-    const nets = networkTiles({ groups: data.groups, networks: data.networks, ungrouped: [], onOpen: open });
-    return [...(showWan ? [...kpiTiles(data), { ...wan, w: nets.length ? 8 : 12 } as TileDef] : []), ...nets, ...(data.deviceGroups.length ? hardwareTiles(data) : [])];
+    const nets = networkTiles({ groups: data.groups, networks: data.networks, ungrouped: [], onOpen: open }).map(inNet);
+    return [
+      ...(showWan ? [...kpis, ...wans] : []),
+      ...nets,
+      ...(data.deviceGroups.length ? hardwareTiles(data).map((t) => ({ ...t, section: 'hw' })) : []),
+    ];
   }, [data, view, open]);
+
+  const sections: TileSection[] | undefined = useMemo(() => {
+    if (view === 'hardware') return undefined;
+    const multi = (data?.wans?.length ?? 0) > 1;
+    return [
+      { id: 'kpi' },
+      { id: 'wan', title: multi ? 'WAN · Internetanbieter' : 'WAN' },
+      { id: 'net', title: 'Netzwerke' },
+      ...(view === 'status' ? [{ id: 'hw', title: 'Hardware' }] : []),
+    ];
+  }, [view, data?.wans?.length]);
 
   const active = editing && draft ? draft : tl.layout;
   const order = useMemo(() => resolveOrder(tiles.map((t) => t.id), active), [tiles, active]);
@@ -242,7 +270,7 @@ export function Dashboard({
 
         {data && view === 'status' && data.statusPage?.description && <p className="text-sm text-noc-muted">{data.statusPage.description}</p>}
 
-        {data && <TileGrid tiles={tiles} order={order} layout={active} editing={editing} onChange={setDraft} />}
+        {data && <TileGrid tiles={tiles} sections={sections} order={order} layout={active} editing={editing} onChange={setDraft} />}
 
         {empty &&
           (view === 'hardware' ? (
