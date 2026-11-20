@@ -3,7 +3,7 @@ import { defaultRefreshMs } from '@/lib/refresh';
 
 export const dynamic = 'force-dynamic';
 
-/** Zweite Seite: Netzwerk-Hardware (Switche & Access Points, Geräte-Gruppen). */
+/** Second page: network hardware (switches & access points, device groups). */
 export default function HardwarePage() {
   return <Dashboard defaultRefreshMs={defaultRefreshMs()} view="hardware" />;
 }

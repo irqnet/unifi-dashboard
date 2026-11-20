@@ -1,15 +1,16 @@
 /**
- * Kachel-Layout des Dashboards (Reihenfolge, Größe, ausgeblendete Kacheln).
- * Wird im Client und im Server (Validierung der API) verwendet – keine Server-Imports.
+ * Dashboard tile layout (order, size, hidden tiles).
+ * Used on the client and the server (API validation) – no server imports.
  */
 
-/** Breiten in 12teln: ⅙, ¼, ⅓, ½, ⅔, voll */
+/** Widths in twelfths: ⅙, ¼, ⅓, ½, ⅔, full */
 export const TILE_WIDTHS = [2, 3, 4, 6, 8, 12] as const;
 export type TileWidth = (typeof TILE_WIDTHS)[number];
-/** Höhe in Rasterreihen (Mindesthöhe – Reihen wachsen mit dem Inhalt) */
+/** Height in grid rows (minimum height – rows grow with the content) */
 export const TILE_MAX_ROWS = 6;
 
-export const WIDTH_LABEL: Record<TileWidth, string> = { 2: '⅙', 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 12: 'Voll' };
+/** Fraction labels; 12 (full width) is translated in the UI. */
+export const WIDTH_LABEL: Record<TileWidth, string> = { 2: '⅙', 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 12: '1/1' };
 
 export interface TileSize {
   w: TileWidth;
@@ -17,15 +18,15 @@ export interface TileSize {
 }
 
 export interface TileLayout {
-  /** Reihenfolge der Kachel-IDs */
+  /** Order of tile IDs */
   order: string[];
-  /** Abweichende Größen je Kachel */
+  /** Custom sizes per tile */
   size: Record<string, TileSize>;
-  /** Ausgeblendete Kacheln */
+  /** Hidden tiles */
   hidden: string[];
 }
 
-/** Bereiche mit eigenem Layout: Netzwerke, Hardware, je Statusseite */
+/** Scopes with their own layout: networks, hardware, one per status page */
 export const SCOPE_RE = /^(network|hardware|status:[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)$/;
 
 const ID_RE = /^[\w:.-]{1,120}$/;
@@ -39,7 +40,7 @@ export function nearestWidth(n: number): TileWidth {
   return TILE_WIDTHS.reduce((best, w) => (Math.abs(w - n) < Math.abs(best - n) ? w : best), TILE_WIDTHS[0]);
 }
 
-/** Prüft ein Layout aus einer Anfrage; liefert eine bereinigte Kopie oder null. */
+/** Checks a layout from a request; returns a cleaned copy or null. */
 export function parseLayout(input: unknown): TileLayout | null {
   if (!input || typeof input !== 'object') return null;
   const o = input as Record<string, unknown>;
@@ -58,9 +59,9 @@ export function parseLayout(input: unknown): TileLayout | null {
 export const EMPTY_LAYOUT: TileLayout = { order: [], size: {}, hidden: [] };
 
 /**
- * Wendet ein gespeichertes Layout auf die aktuell vorhandenen Kacheln an.
- * Neue Kacheln (z. B. neu angelegte Gruppen) erscheinen an ihrer Standardposition,
- * nicht mehr vorhandene werden ignoriert.
+ * Applies a saved layout to the tiles currently present.
+ * New tiles (e.g. newly created groups) appear at their default position,
+ * tiles that no longer exist are ignored.
  */
 export function resolveOrder(defaultIds: string[], saved: TileLayout): string[] {
   const present = new Set(defaultIds);
@@ -68,7 +69,7 @@ export function resolveOrder(defaultIds: string[], saved: TileLayout): string[] 
   const placed = new Set(order);
   defaultIds.forEach((id, i) => {
     if (placed.has(id)) return;
-    // hinter dem nächsten bereits platzierten Vorgänger aus der Standardreihenfolge einfügen
+    // insert after the nearest already placed predecessor from the default order
     let at = 0;
     for (let j = i - 1; j >= 0; j--) {
       const k = order.indexOf(defaultIds[j]);

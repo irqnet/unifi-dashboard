@@ -1,4 +1,4 @@
-/** Rohdaten-Typen der UniFi Network API (nur die genutzten Felder). */
+/** Raw data types of the UniFi Network API (only the fields in use). */
 
 export interface UniFiEnvelope<T> {
   meta: { rc: 'ok' | 'error'; msg?: string };
@@ -58,7 +58,7 @@ export interface RawDevice {
   ip?: string;
   version?: string;
   uptime?: number;
-  state?: number; // 1 = verbunden
+  state?: number; // 1 = connected
   adopted?: boolean;
   num_sta?: number;
   'user-num_sta'?: number;
@@ -83,7 +83,7 @@ export interface RawDevice {
   wan3?: RawWanPort;
 }
 
-/** WAN-Anschluss am Gateway (stat/device: wan1, wan2 …) */
+/** WAN connection on the gateway (stat/device: wan1, wan2 …) */
 export interface RawWanPort {
   ip?: string;
   up?: boolean;
@@ -125,13 +125,13 @@ export interface RawNetwork {
   ip_subnet?: string;
   enabled?: boolean;
   networkgroup?: string;
-  /** WAN-Netzwerke: WAN, WAN2, … */
+  /** WAN networks: WAN, WAN2, … */
   wan_networkgroup?: string;
-  /** Multi-WAN: failover-only oder weighted (Loadbalancing) */
+  /** Multi-WAN: failover-only or weighted (load balancing) */
   wan_load_balance_type?: string;
-  /** Gewicht beim Loadbalancing (1–99) */
+  /** Load-balancing weight (1–99) */
   wan_load_balance_weight?: number;
-  /** „Expected ISP Speeds“ aus den WAN-Einstellungen */
+  /** "Expected ISP Speeds" from the WAN settings */
   wan_provider_capabilities?: { download_kilobits_per_second?: number; upload_kilobits_per_second?: number };
 }
 
@@ -166,14 +166,14 @@ export interface SiteRawData {
   health: RawHealth[];
 }
 
-/** Hotspot-Voucher aus stat/voucher (klassische Network-API). */
+/** Hotspot voucher from stat/voucher (classic Network API). */
 export interface RawVoucher {
   _id: string;
   code: string;
   create_time: number;
-  /** Gültigkeit in Minuten ab erster Nutzung */
+  /** Validity in minutes from first use */
   duration: number;
-  /** 0 = unbegrenzt viele Nutzungen, 1 = einmalig, n = n Geräte */
+  /** 0 = unlimited uses, 1 = single use, n = n devices */
   quota: number;
   used?: number;
   note?: string | null;
@@ -189,7 +189,7 @@ export interface RawVoucher {
   for_hotspot?: boolean;
 }
 
-/** Gast-Sitzung aus stat/guest (für die Zuordnung Voucher → Geräte). */
+/** Guest session from stat/guest (for mapping voucher → devices). */
 export interface RawGuest {
   _id?: string;
   mac: string;

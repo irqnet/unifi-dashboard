@@ -1,6 +1,6 @@
 /**
- * Baut aus Poller-Zustand + Admin-Konfiguration (SQLite) die Dashboard-Antwort:
- * Gruppen-Aggregation, Verlaufsdaten, Datenschutz (Anonymisierung / Ausblenden / Maskierung).
+ * Builds the dashboard response from poller state + admin configuration (SQLite):
+ * group aggregation, history data, privacy (anonymisation / hiding / masking).
  */
 import 'server-only';
 import { getConfig } from '../env';
@@ -24,6 +24,7 @@ import type {
   WanLinkView,
   WanView,
 } from '../views';
+import { CONTROLLER_ERROR } from '../views';
 import { clientRates, getPoller, type Sample } from './poller';
 import type { RawDevice, RawNetwork } from './types';
 
@@ -116,8 +117,8 @@ function overallStatus(error: string | null, health: { subsystem: string; status
 const wanKey = (n: RawNetwork) => (n.wan_networkgroup ?? 'WAN').toUpperCase();
 
 /**
- * WAN-Anschlüsse einzeln. Bei nur einem Anschluss entspricht der Eintrag der Gesamtansicht.
- * Liefert das Gateway keinen Durchsatz je Anschluss, bekommt der aktive WAN den Gesamtwert.
+ * WAN connections individually. With a single connection the entry equals the overall view.
+ * If the gateway provides no per-connection throughput, the active WAN gets the total.
  */
 function wanLinks(
   networks: RawNetwork[],
@@ -201,7 +202,7 @@ function wanLinks(
       rawWeight: n.wan_load_balance_type?.toLowerCase() === 'weighted' ? (num(n.wan_load_balance_weight) ?? null) : null,
     };
   });
-  // Anteil beim Loadbalancing: Gewicht relativ zu den übrigen aktiven Leitungen
+  // Load-balancing share: weight relative to the other active links
   if (mode === 'loadbalance') {
     const sum = links.reduce((s, l) => s + (l.role === 'active' && l.rawWeight ? l.rawWeight : 0), 0);
     for (const l of links) if (sum > 0 && l.role === 'active' && l.rawWeight) l.weight = Math.round((l.rawWeight / sum) * 100);
@@ -210,10 +211,10 @@ function wanLinks(
 }
 
 /**
- * Ermittelt das aktuell aktive WAN-Netzwerk (für Failover/Multi-WAN):
- * 1. Uplink des Gateways (uplink.comment/name = WAN, WAN2 …)
- * 2. WAN-IP aus stat/health passend zu wan1/wan2 des Gateways
- * 3. sonst das primäre WAN (wan_networkgroup = WAN)
+ * Determines the currently active WAN network (for failover/multi-WAN):
+ * 1. gateway uplink (uplink.comment/name = WAN, WAN2 …)
+ * 2. WAN IP from stat/health matching wan1/wan2 of the gateway
+ * 3. otherwise the primary WAN (wan_networkgroup = WAN)
  */
 export function findActiveWan(networks: RawNetwork[], gw: RawDevice | undefined, wanIp: string | null): RawNetwork | undefined {
   const wans = networks.filter((n) => n.purpose === 'wan' && n.enabled !== false);
@@ -236,12 +237,12 @@ export function findActiveWan(networks: RawNetwork[], gw: RawDevice | undefined,
 }
 
 /**
- * Einschränkung auf eine Statusseite: nur deren VLAN- und Geräte-Gruppen (auch im
- * Hauptdashboard verborgene), keine nicht gruppierten Netze/Geräte, WAN optional.
+ * Restriction to a status page: only its VLAN and device groups (including ones hidden
+ * on the main dashboard), no ungrouped networks/devices, WAN optional.
  */
 export interface DashboardScope {
   page: StatusPage;
-  /** Weitere Statusseiten des Betrachters (für die Navigation) */
+  /** Further status pages of the viewer (for navigation) */
   pages: { slug: string; title: string }[];
   loggedIn: boolean;
 }
@@ -266,7 +267,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
   const netSettings = listNetworkSettings(site);
   const deviceNames = new Map(data.devices.map((d) => [d.mac, d.name || d.model || d.mac]));
 
-  // --- Netzwerke & Sichtbarkeit -------------------------------------------------
+  // --- Networks & visibility -----------------------------------------------------
   const hiddenGroupNets = new Set(groups.filter((g) => g.hidden).flatMap((g) => g.networkIds));
   const anonGroupNets = new Set(groups.filter((g) => g.anonymizeClients).flatMap((g) => g.networkIds));
   const visibleNets = relevantNetworks(data.networks).filter(
@@ -274,7 +275,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
   );
   const visibleIds = new Set(visibleNets.map((n) => n._id));
 
-  // --- Clients je Netzwerk ------------------------------------------------------
+  // --- Clients per network -------------------------------------------------------
   const clientsByNet = new Map<string, ClientRow[]>();
   let counter = 0;
   for (const c of data.clients) {
@@ -324,7 +325,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
     };
   }
 
-  // --- Gruppen ------------------------------------------------------------------
+  // --- Groups --------------------------------------------------------------------
   const groupViews: GroupView[] = [];
   const grouped = new Set<string>();
   for (const g of groups) {
@@ -350,7 +351,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
   }
   const ungrouped = settings.showUngrouped ? visibleNets.filter((n) => !grouped.has(n._id)).map((n) => n._id) : [];
 
-  // Nicht angezeigte Netzwerke aus der Antwort entfernen
+  // Remove networks that are not shown from the response
   const shown = new Set([...groupViews.flatMap((g) => g.networkIds), ...ungrouped]);
   for (const id of Object.keys(networks)) if (!shown.has(id)) delete networks[id];
 
@@ -426,7 +427,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
       };
     });
 
-  // --- Geräte-Gruppen -----------------------------------------------------------
+  // --- Device groups -------------------------------------------------------------
   const devGroups = listDeviceGroups(site);
   const devGroupOf = new Map<string, (typeof devGroups)[number]>();
   devGroups.forEach((g) => g.deviceMacs.forEach((m) => devGroupOf.set(m, g)));
@@ -506,7 +507,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
   const allCounts = scope ? counts(allRows) : counts(data.clients.map((c) => ({ wired: !!c.is_wired }) as ClientRow));
 
   if (scope) {
-    // Status nur aus den Geräten (und ggf. dem WAN) der Statusseite ableiten
+    // Derive the status only from the devices (and the WAN, if shown) of the status page
     const scopedMacs = new Set([...visibleSwitches, ...visibleAps].map((d) => d.mac));
     const scopedDevices = data.devices.filter((d) => scopedMacs.has(d.mac.toLowerCase()));
     const scopedStatus: SystemStatus = st.error
@@ -524,7 +525,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
       sites: sites.filter((s) => s.name === site).map((s) => ({ name: s.name, desc: s.desc || s.name })),
       generatedAt: Date.now(),
       lastPoll: st.lastPoll,
-      error: st.error ? 'Verbindung zum Controller gestört' : null,
+      error: st.error ? CONTROLLER_ERROR : null,
       pollingIntervalMs: cfg.pollingIntervalMs,
       isAdmin: false,
       status: scopedStatus,
@@ -580,7 +581,7 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
   };
 }
 
-/** Netzwerkliste für den Admin-Bereich (live aus /rest/networkconf + gespeicherte Einstellungen). */
+/** Network list for the admin area (live from /rest/networkconf + stored settings). */
 export async function buildAdminNetworks(site: string): Promise<{ networks: AdminNetwork[]; error: string | null }> {
   const poller = getPoller();
   await poller.ensureStarted();
@@ -604,7 +605,7 @@ export async function buildAdminNetworks(site: string): Promise<{ networks: Admi
   return { networks, error: st.error };
 }
 
-/** Geräteliste (Switche & APs) für den Admin-Bereich inkl. Gruppenzuordnung. */
+/** Device list (switches & APs) for the admin area incl. group assignment. */
 export async function buildAdminDevices(site: string): Promise<{ devices: AdminDevice[]; error: string | null }> {
   const poller = getPoller();
   await poller.ensureStarted();

@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from 'next';
+import { I18nProvider } from '@/components/i18n/I18nProvider';
 import { THEME_INIT_SCRIPT } from '@/components/ui/theme';
+import { getLocale, getT } from '@/lib/i18n/server';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: 'UniFi Network Status',
-  description: 'Echtzeit-Status- und Monitoring-Dashboard für UniFi-Netzwerke',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: 'UniFi Network Status',
+    description: t('meta.description'),
+    robots: { index: false, follow: false },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [
@@ -18,14 +23,17 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    // Klasse dark/light setzt das Inline-Skript vor dem ersten Zeichnen (gespeicherte Wahl oder System)
-    <html lang="de" className="dark" suppressHydrationWarning>
+    // The inline script sets the dark/light class before first paint (saved choice or system)
+    <html lang={locale} className="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <I18nProvider locale={locale}>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

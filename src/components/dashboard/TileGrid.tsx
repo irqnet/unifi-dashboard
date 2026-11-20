@@ -20,24 +20,25 @@ import { CSS as DndCSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
 import { EyeOff, GripVertical, Scaling } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 import { TILE_MAX_ROWS, TILE_WIDTHS, WIDTH_LABEL, nearestWidth, type TileLayout, type TileSize, type TileWidth } from '@/lib/layout';
 
 export interface TileDef {
   id: string;
-  /** Name für die Liste ausgeblendeter Kacheln und Screenreader */
+  /** Name for the hidden-tiles list and screen readers */
   title: string;
   w: TileWidth;
   h: number;
-  /** Kennzahl: auf dem Handy in der wischbaren Leiste statt im Raster */
+  /** Key figure: on phones in the swipeable strip instead of the grid */
   kpi?: boolean;
-  /** Bereich, in dem die Kachel steht (eigenes Raster, nur innerhalb verschiebbar) */
+  /** Section the tile belongs to (own grid, only movable within it) */
   section?: string;
-  /** Auf Handy und Tablet immer volle Breite (z. B. WAN-Kacheln nebeneinander nur am Desktop) */
+  /** Always full width on phone and tablet (e.g. WAN tiles side by side only on desktop) */
   fullBelowLg?: boolean;
   render: () => ReactNode;
 }
 
-/** Ziel ist die Kachel unter dem Zeiger; daneben (Lücke) die nächstgelegene. */
+/** Target is the tile under the pointer; next to it (gap) the nearest one. */
 const collision: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
   return hits.length ? hits : closestCenter(args);
@@ -56,13 +57,13 @@ function cellStyle(size: TileSize, fullBelowLg?: boolean): CSSProperties {
 }
 
 /**
- * Raster aus verschiebbaren und skalierbaren Kacheln.
- * Im Bearbeitungsmodus: ziehen zum Verschieben (Touch: lange drücken),
- * Ecke ziehen oder Größenmenü zum Skalieren, Auge zum Ausblenden.
+ * Grid of movable and resizable tiles.
+ * In edit mode: drag to move (touch: long press),
+ * drag the corner or use the size menu to resize, eye to hide.
  */
 export interface TileSection {
   id: string;
-  /** Überschrift; ohne Titel steht der Bereich ohne Kopfzeile */
+  /** Heading; without a title the section has no header row */
   title?: string;
 }
 
@@ -75,9 +76,9 @@ export function TileGrid({
   onChange,
 }: {
   tiles: TileDef[];
-  /** Bereiche in Anzeigereihenfolge; Kacheln ohne passenden Bereich landen im letzten */
+  /** Sections in display order; tiles without a matching section end up in the last one */
   sections?: TileSection[];
-  /** Aufgelöste Reihenfolge aller Kachel-IDs */
+  /** Resolved order of all tile IDs */
   order: string[];
   layout: TileLayout;
   editing: boolean;
@@ -115,12 +116,12 @@ export function TileGrid({
     const r = el?.getBoundingClientRect();
     setActiveRect(r ? { width: r.width, height: r.height } : null);
   };
-  // Live umsortieren, während gezogen wird – funktioniert auch bei unterschiedlich großen Kacheln.
-  // Pro Ziel nur einmal tauschen, sonst springen ungleich große Kacheln hin und her.
+  // Reorder live while dragging – also works with tiles of different sizes.
+  // Swap only once per target, otherwise tiles of different sizes jump back and forth.
   const onDragOver = (e: DragOverEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id || lastOver.current === String(over.id)) return;
-    // Nur innerhalb des eigenen Bereichs verschieben
+    // Only move within the own section
     if (sectionOf(String(active.id)) !== sectionOf(String(over.id))) return;
     lastOver.current = String(over.id);
     const from = order.indexOf(String(active.id));
@@ -137,7 +138,7 @@ export function TileGrid({
 
   return (
     <div ref={rootRef} className="space-y-4 sm:space-y-5">
-      {/* Handy: Kennzahlen als wischbare Leiste */}
+      {/* Phone: key figures as a swipeable strip */}
       {!editing && kpis.length > 0 && (
         <div className="no-scrollbar -mx-3 mb-2.5 flex snap-x scroll-px-3 gap-2 overflow-x-auto px-3 pb-1 sm:hidden">
           {kpis.map((id) => (
@@ -151,7 +152,7 @@ export function TileGrid({
         {secs.map((sec) => {
           const ids = visible.filter((id) => sectionOf(id) === sec.id);
           if (!ids.length) return null;
-          // Bereich nur aus Kennzahlen: auf dem Handy steht er in der wischbaren Leiste
+          // Section consisting only of key figures: on phones it lives in the swipeable strip
           const onlyKpi = !editing && ids.every((id) => byId.get(id)!.kpi);
           return (
             <section key={sec.id} className={clsx(onlyKpi && 'max-sm:hidden')}>
@@ -219,6 +220,7 @@ function SortableTile({
   onHide: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id: tile.id, disabled: !editing });
+  const t = useT();
   const [menu, setMenu] = useState(false);
   const cellRef = useRef<HTMLDivElement | null>(null);
 
@@ -226,7 +228,7 @@ function SortableTile({
     if (!editing) setMenu(false);
   }, [editing]);
 
-  // Ecke ziehen: Breite in Rasterspalten, Höhe in Reihen einrasten
+  // Drag the corner: snap width to grid columns, height to rows
   const startResize = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -279,7 +281,7 @@ function SortableTile({
         isDragging && 'opacity-40',
       )}
       data-tile-id={tile.id}
-      aria-label={editing ? `${tile.title} – verschieben` : undefined}
+      aria-label={editing ? t('tiles.moveLabel', { title: tile.title }) : undefined}
       {...(editing ? attributes : {})}
       {...(editing ? listeners : {})}
     >
@@ -296,8 +298,8 @@ function SortableTile({
               type="button"
               onClick={() => setMenu((m) => !m)}
               className={clsx('flex h-7 w-7 items-center justify-center rounded-lg shadow ring-1 ring-noc-line', menu ? 'bg-sky-500 text-white' : 'bg-noc-panel/95 text-noc-muted hover:text-noc-text')}
-              aria-label={`Größe von ${tile.title}`}
-              title="Größe"
+              aria-label={t('tiles.sizeOf', { title: tile.title })}
+              title={t('tiles.size')}
             >
               <Scaling className="h-3.5 w-3.5" />
             </button>
@@ -305,15 +307,15 @@ function SortableTile({
               type="button"
               onClick={onHide}
               className="flex h-7 w-7 items-center justify-center rounded-lg bg-noc-panel/95 text-noc-muted shadow ring-1 ring-noc-line hover:text-rose-300"
-              aria-label={`${tile.title} ausblenden`}
-              title="Ausblenden"
+              aria-label={t('tiles.hideLabel', { title: tile.title })}
+              title={t('tiles.hide')}
             >
               <EyeOff className="h-3.5 w-3.5" />
             </button>
           </div>
           {menu && (
             <div className="absolute right-2 top-11 z-20 w-56 rounded-xl bg-noc-panel p-2.5 text-xs shadow-2xl ring-1 ring-noc-line" onMouseDown={stop} onTouchStart={stop} onPointerDown={stop} onKeyDown={stop}>
-              <div className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-wider text-noc-muted">Breite</div>
+              <div className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-wider text-noc-muted">{t('tiles.width')}</div>
               <div className="grid grid-cols-6 gap-1">
                 {TILE_WIDTHS.map((w) => (
                   <button
@@ -322,11 +324,11 @@ function SortableTile({
                     onClick={() => onSize({ ...size, w })}
                     className={clsx('rounded-md py-1.5 font-medium', size.w === w ? 'bg-sky-500 text-white' : 'bg-noc-raised text-noc-text hover:bg-fg/10')}
                   >
-                    {WIDTH_LABEL[w]}
+                    {w === 12 ? t('tiles.full') : WIDTH_LABEL[w]}
                   </button>
                 ))}
               </div>
-              <div className="mb-1.5 mt-2.5 px-0.5 text-[10px] font-medium uppercase tracking-wider text-noc-muted">Höhe (Reihen)</div>
+              <div className="mb-1.5 mt-2.5 px-0.5 text-[10px] font-medium uppercase tracking-wider text-noc-muted">{t('tiles.height')}</div>
               <div className="grid grid-cols-6 gap-1">
                 {Array.from({ length: TILE_MAX_ROWS }, (_, i) => i + 1).map((h) => (
                   <button
@@ -339,7 +341,7 @@ function SortableTile({
                   </button>
                 ))}
               </div>
-              <p className="mt-2 px-0.5 text-[11px] leading-snug text-noc-muted">Auf dem Handy werden Kacheln automatisch ein- oder zweispaltig angeordnet.</p>
+              <p className="mt-2 px-0.5 text-[11px] leading-snug text-noc-muted">{t('tiles.phoneHint')}</p>
             </div>
           )}
           <span
@@ -348,7 +350,7 @@ function SortableTile({
             onTouchStart={stop}
             className="absolute bottom-1 right-1 z-10 hidden h-5 w-5 cursor-nwse-resize touch-none items-end justify-end sm:flex"
             role="presentation"
-            title="Ziehen zum Skalieren"
+            title={t('tiles.dragToResize')}
           >
             <span className="h-3 w-3 rounded-br-md border-b-[3px] border-r-[3px] border-sky-400" />
           </span>

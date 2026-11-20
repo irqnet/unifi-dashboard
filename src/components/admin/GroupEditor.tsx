@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 import type { AdminNetwork } from '@/lib/views';
 import { CheckRow, ColorPicker, DeleteRow, FieldRow, Group, Segmented, Sheet, SwitchRow, TextInput } from './ui';
 
@@ -35,6 +36,7 @@ export function GroupEditor({
   onDelete?: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<GroupDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function GroupEditor({
     set('networkIds', draft.networkIds.includes(id) ? draft.networkIds.filter((x) => x !== id) : [...draft.networkIds, id]);
 
   async function submit() {
-    if (!draft.name.trim()) return setError('Gib der Gruppe einen Namen.');
+    if (!draft.name.trim()) return setError(t('groupEditor.nameRequired'));
     setBusy(true);
     setError(null);
     const err = await onSave(draft);
@@ -55,31 +57,31 @@ export function GroupEditor({
   }
 
   return (
-    <Sheet title={isNew ? 'Neue Gruppe' : 'Gruppe bearbeiten'} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
+    <Sheet title={isNew ? t('groupEditor.new') : t('groupEditor.edit')} onCancel={onCancel} onSubmit={() => void submit()} busy={busy} error={error}>
       <Group>
-        <FieldRow label="Name" htmlFor="grp-name">
-          <TextInput id="grp-name" value={draft.name} maxLength={80} onChange={(e) => set('name', e.target.value)} placeholder="z. B. Smart Home & IoT" />
+        <FieldRow label={t('common.name')} htmlFor="grp-name">
+          <TextInput id="grp-name" value={draft.name} maxLength={80} onChange={(e) => set('name', e.target.value)} placeholder={t('groupEditor.namePlaceholder')} />
         </FieldRow>
-        <FieldRow label="Beschreibung" htmlFor="grp-desc">
-          <TextInput id="grp-desc" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} placeholder="Optional" />
+        <FieldRow label={t('common.description')} htmlFor="grp-desc">
+          <TextInput id="grp-desc" value={draft.description} maxLength={300} onChange={(e) => set('description', e.target.value)} placeholder={t('common.optional')} />
         </FieldRow>
-        <FieldRow label="Farbe">
+        <FieldRow label={t('common.color')}>
           <ColorPicker value={draft.color} onChange={(c) => set('color', c)} />
         </FieldRow>
-        <FieldRow label="Darstellung">
+        <FieldRow label={t('groupEditor.display')}>
           <Segmented
             value={draft.displayMode}
             options={[
-              ['consolidated', 'Zusammengefasst'],
-              ['expanded', 'Einzeln je VLAN'],
+              ['consolidated', t('networks.consolidated')],
+              ['expanded', t('groupEditor.perVlan')],
             ]}
             onChange={(v) => set('displayMode', v)}
           />
         </FieldRow>
       </Group>
 
-      <Group title="Netzwerke" aside={`${draft.networkIds.length} ausgewählt`}>
-        {networks.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">Vom Controller wurden keine Netzwerke geladen.</p>}
+      <Group title={t('nav.networks')} aside={t('admin.selected', { count: draft.networkIds.length })}>
+        {networks.length === 0 && <p className="px-3.5 py-3 text-sm text-noc-muted">{t('groupEditor.noNetworks')}</p>}
         {networks.map((n) => {
           const checked = draft.networkIds.includes(n.id);
           const other = n.groupId !== null && n.groupId !== initial.id ? groupName(n.groupId) : undefined;
@@ -89,26 +91,26 @@ export function GroupEditor({
               checked={checked}
               onToggle={() => toggleNet(n.id)}
               title={n.name}
-              subtitle={other ? (checked ? `Wird aus „${other}“ verschoben` : `Derzeit in „${other}“`) : (n.subnet ?? undefined)}
+              subtitle={other ? (checked ? t('admin.movedFrom', { name: other }) : t('admin.currentlyIn', { name: other })) : (n.subnet ?? undefined)}
               detail={n.vlan ? `VLAN ${n.vlan}` : 'untagged'}
             />
           );
         })}
       </Group>
 
-      <Group footer="Anonymisiert erscheinen Clients ohne Hostname, IP und MAC als „Client 1, Client 2 …“.">
-        <SwitchRow title="Auf dem Dashboard anzeigen" checked={!draft.hidden} onChange={(v) => set('hidden', !v)} />
-        <SwitchRow title="Hostnamen anonymisieren" checked={draft.anonymizeClients} onChange={(v) => set('anonymizeClients', v)} />
+      <Group footer={t('groupEditor.anonymizeHint')}>
+        <SwitchRow title={t('admin.showOnDashboard')} checked={!draft.hidden} onChange={(v) => set('hidden', !v)} />
+        <SwitchRow title={t('groupEditor.anonymize')} checked={draft.anonymizeClients} onChange={(v) => set('anonymizeClients', v)} />
       </Group>
 
       {!isNew && onDelete && (
         <DeleteRow
-          label="Gruppe löschen"
+          label={t('groupEditor.delete')}
           confirming={confirmDelete}
           onAsk={() => setConfirmDelete(true)}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void onDelete()}
-          hint="Die Netzwerke bleiben erhalten und erscheinen danach ohne Gruppe."
+          hint={t('groupEditor.deleteHint')}
         />
       )}
     </Sheet>

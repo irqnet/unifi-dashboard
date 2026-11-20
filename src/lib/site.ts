@@ -1,7 +1,7 @@
 import 'server-only';
 import { getPoller } from './unifi/poller';
 
-/** Validiert den ?site=-Parameter gegen die konfigurierten/erkannten Sites. */
+/** Validates the ?site= parameter against the configured/discovered sites. */
 export async function resolveSite(requested: string | null): Promise<string | null> {
   const poller = getPoller();
   await poller.ensureStarted();

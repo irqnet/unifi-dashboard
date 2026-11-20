@@ -1,19 +1,20 @@
 'use client';
 
 /**
- * UI-Bausteine für den Admin-Bereich im Stil der macOS-/iOS-Einstellungen:
- * gruppierte Listen, Zeilen mit Schalter oder Chevron, Bearbeiten in einem Sheet.
+ * UI building blocks for the admin area in the style of macOS/iOS settings:
+ * grouped lists, rows with a switch or chevron, editing in a sheet.
  */
 
 import clsx from 'clsx';
 import { Check, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 
 export type Api = <T>(url: string, init?: RequestInit) => Promise<{ data?: T; error?: string }>;
 
 export const PRESET_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb7185', '#2dd4bf', '#94a3b8'];
 
-// --- Seitenkopf -----------------------------------------------------------------------
+// --- Page header ----------------------------------------------------------------------
 
 export function PageHeader({ title, lead, action }: { title: string; lead?: ReactNode; action?: ReactNode }) {
   return (
@@ -54,7 +55,7 @@ export function LinkButton({ children, className, ...props }: React.ButtonHTMLAt
   );
 }
 
-// --- Gruppierte Liste ----------------------------------------------------------------
+// --- Grouped list ------------------------------------------------------------------
 
 export function Group({
   title,
@@ -128,7 +129,7 @@ export function Row({
   );
 }
 
-/** Zeile mit Titel, Erklärung und Schalter rechts. */
+/** Row with title, explanation and a switch on the right. */
 export function SwitchRow({
   title,
   subtitle,
@@ -234,7 +235,7 @@ export function LoadingRow() {
   );
 }
 
-// --- Formularzeilen -----------------------------------------------------------------
+// --- Form rows ------------------------------------------------------------------
 
 export function FieldRow({ label, children, htmlFor }: { label: string; children: ReactNode; htmlFor?: string }) {
   return (
@@ -252,6 +253,7 @@ export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
 }
 
 export function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-2">
       {PRESET_COLORS.map((c) => (
@@ -274,9 +276,9 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
           !PRESET_COLORS.includes(value.toLowerCase()) && 'ring-2 ring-white',
         )}
         style={{ background: 'conic-gradient(#f87171,#fbbf24,#34d399,#38bdf8,#a78bfa,#f472b6,#f87171)' }}
-        title="Eigene Farbe"
+        title={t('admin.customColor')}
       >
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Eigene Farbe" />
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={t('admin.customColor')} />
       </label>
     </div>
   );
@@ -304,7 +306,7 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
   );
 }
 
-/** Auswahlzeile mit rundem Häkchen (Mehrfachauswahl in Sheets). */
+/** Selection row with a round check mark (multi-select in sheets). */
 export function CheckRow({
   checked,
   onToggle,
@@ -346,7 +348,7 @@ export function CheckRow({
   );
 }
 
-// --- Sheet (Bearbeiten-Dialog) --------------------------------------------------------
+// --- Sheet (edit dialog) --------------------------------------------------------------
 
 export function Sheet({
   title,
@@ -354,7 +356,7 @@ export function Sheet({
   onSubmit,
   busy,
   error,
-  submitLabel = 'Sichern',
+  submitLabel,
   children,
 }: {
   title: string;
@@ -365,6 +367,7 @@ export function Sheet({
   submitLabel?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -401,13 +404,13 @@ export function Sheet({
         >
           <header className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-fg/[0.07] px-4 py-3">
             <LinkButton onClick={onCancel} className="justify-self-start text-[15px]">
-              Abbrechen
+              {t('common.cancel')}
             </LinkButton>
             <h2 id={titleId} className="text-[15px] font-semibold text-noc-strong">
               {title}
             </h2>
             <button type="submit" disabled={busy} className="justify-self-end text-[15px] font-semibold text-sky-400 hover:text-sky-300 disabled:opacity-50">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel ?? t('common.save')}
             </button>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-5">
@@ -424,7 +427,7 @@ export function Sheet({
   );
 }
 
-/** Rote Lösch-Zeile mit Bestätigung im selben Platz. */
+/** Red delete row with in-place confirmation. */
 export function DeleteRow({
   label,
   confirming,
@@ -442,17 +445,18 @@ export function DeleteRow({
   disabled?: boolean;
   hint?: ReactNode;
 }) {
+  const t = useT();
   return (
     <Group footer={hint}>
       {confirming ? (
         <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-          <span className="text-sm text-noc-text">Wirklich löschen?</span>
+          <span className="text-sm text-noc-text">{t('admin.confirmDelete')}</span>
           <div className="flex gap-2">
             <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-[13px] text-noc-muted hover:bg-fg/[0.05] hover:text-noc-text">
-              Abbrechen
+              {t('common.cancel')}
             </button>
             <button type="button" onClick={onConfirm} className="rounded-lg bg-rose-500 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-rose-400">
-              Löschen
+              {t('common.delete')}
             </button>
           </div>
         </div>

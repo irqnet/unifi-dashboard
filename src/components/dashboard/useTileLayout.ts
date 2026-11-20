@@ -31,9 +31,9 @@ interface ServerState {
 }
 
 /**
- * Lädt und speichert das Kachel-Layout eines Bereichs.
- * Mit Benutzerkonto auf dem Server, sonst im Browser. Ohne eigenes Layout gilt
- * das Standardlayout des Admins, ohne dieses die eingebaute Anordnung.
+ * Loads and saves the tile layout of a scope.
+ * With a user account on the server, otherwise in the browser. Without an own layout
+ * the admin's default layout applies, without that the built-in arrangement.
  */
 export function useTileLayout(scope: string) {
   const [server, setServer] = useState<ServerState | null>(null);
@@ -87,7 +87,7 @@ export function useTileLayout(scope: string) {
     [canSaveOwn, request, scope],
   );
 
-  /** Eigenes Layout verwerfen → Standardlayout gilt wieder. */
+  /** Discard own layout → the default layout applies again. */
   const reset = useCallback(async () => {
     setError(null);
     if (canSaveOwn) {
@@ -99,7 +99,7 @@ export function useTileLayout(scope: string) {
     }
   }, [canSaveOwn, request, scope]);
 
-  /** Admin: Layout als Standard für alle speichern (eigenes Layout entfällt dann). */
+  /** Admin: save layout as the default for everyone (the own layout is dropped). */
   const saveAsDefault = useCallback(
     async (next: TileLayout) => {
       setError(null);
@@ -116,7 +116,7 @@ export function useTileLayout(scope: string) {
     [canSaveOwn, request, scope],
   );
 
-  /** Admin: Standardlayout entfernen → eingebaute Anordnung. */
+  /** Admin: remove the default layout → built-in arrangement. */
   const clearDefault = useCallback(async () => {
     setError(null);
     try {

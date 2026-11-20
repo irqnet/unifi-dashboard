@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { deleteDeviceGroup, updateDeviceGroup } from '@/lib/db';
 import { parseDeviceGroupInput, readJson } from '@/lib/validate';
+import { apiError } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,11 +15,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const auth = await requireRole('admin');
   if ('error' in auth) return auth.error;
   const id = parseId((await params).id);
-  if (!id) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 });
+  if (!id) return apiError('api.badId', 400);
   const parsed = parseDeviceGroupInput(await readJson(req), true);
-  if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  if ('error' in parsed) return apiError(parsed.error, 400);
   const group = updateDeviceGroup(id, parsed.value);
-  if (!group) return NextResponse.json({ error: 'Gruppe nicht gefunden' }, { status: 404 });
+  if (!group) return apiError('api.groupNotFound', 404);
   return NextResponse.json({ group });
 }
 
@@ -26,7 +27,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const auth = await requireRole('admin');
   if ('error' in auth) return auth.error;
   const id = parseId((await params).id);
-  if (!id) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 });
-  if (!deleteDeviceGroup(id)) return NextResponse.json({ error: 'Gruppe nicht gefunden' }, { status: 404 });
+  if (!id) return apiError('api.badId', 400);
+  if (!deleteDeviceGroup(id)) return apiError('api.groupNotFound', 404);
   return NextResponse.json({ ok: true });
 }

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-/** Die Voucher-Verwaltung lebt im Admin-Bereich; alte Links und Lesezeichen leiten dorthin. */
+/** Voucher management lives in the admin area; old links and bookmarks redirect there. */
 export default function VouchersPage() {
-  redirect('/admin?bereich=voucher');
+  redirect('/admin?section=vouchers');
 }

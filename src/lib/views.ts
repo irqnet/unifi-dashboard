@@ -1,4 +1,4 @@
-/** Normalisierte, an das Frontend gelieferte Datentypen (Client & Server). */
+/** Normalised data types delivered to the frontend (client & server). */
 
 export type SystemStatus = 'online' | 'degraded' | 'offline' | 'unknown';
 
@@ -117,33 +117,33 @@ export interface WanView {
   latency: number | null;
   xputDown: number | null; // Mbit/s (Speedtest)
   xputUp: number | null;
-  down: number; // aktueller Durchsatz bit/s
+  down: number; // current throughput bit/s
   up: number;
   history: TrafficPoint[];
-  /** Kapazität für die Auslastungsanzeige in bit/s und deren Quelle */
+  /** Capacity for the utilisation display in bit/s and its source */
   capacityDown: number | null;
   capacityUp: number | null;
   capacitySource: 'isp' | 'config' | 'speedtest' | 'peak' | null;
-  /** Aktiver WAN-Anschluss (Name aus UniFi, z. B. „Internet 1“) */
+  /** Active WAN connection (name from UniFi, e.g. "Internet 1") */
   activeWan: string | null;
-  /** Expected ISP Speeds des aktiven WAN in bit/s */
+  /** Expected ISP speeds of the active WAN in bit/s */
   expectedDown: number | null;
   expectedUp: number | null;
 }
 
-/** Ein einzelner WAN-Anschluss (bei Multi-WAN eine Kachel je Anbieter) */
+/** A single WAN connection (with multi-WAN one tile per provider) */
 export interface WanLinkView extends WanView {
-  /** WAN-Gruppe aus UniFi: WAN, WAN2 … */
+  /** WAN group from UniFi: WAN, WAN2 … */
   key: string;
-  /** Netzwerkname aus UniFi, z. B. „Internet 1“ */
+  /** Network name from UniFi, e.g. "Internet 1" */
   name: string;
-  /** Trägt gerade den Verkehr (führende WAN laut Gateway) */
+  /** Currently carries the traffic (leading WAN according to the gateway) */
   isActive: boolean;
-  /** Multi-WAN-Modus aus der UniFi-Konfiguration, null wenn unbekannt */
+  /** Multi-WAN mode from the UniFi configuration, null if unknown */
   mode: 'failover' | 'loadbalance' | null;
-  /** Anzeige-Status: aktiv, bereit (Failover-Reserve) oder offline */
+  /** Display state: active, standby (failover reserve) or offline */
   role: 'active' | 'standby' | 'offline';
-  /** Anteil beim Loadbalancing in Prozent */
+  /** Load-balancing share in percent */
   weight: number | null;
 }
 
@@ -170,22 +170,22 @@ export interface DashboardPayload {
   isAdmin: boolean;
   status: SystemStatus;
   wan: WanView;
-  /** WAN-Anschlüsse einzeln (ein Eintrag bei nur einem Anbieter) */
+  /** WAN connections individually (one entry with a single provider) */
   wans: WanLinkView[];
   gateway: GatewayView;
   totals: ClientCounts & { down: number; up: number };
   groups: GroupView[];
   networks: Record<string, NetworkView>;
-  /** Netzwerk-IDs ohne Gruppe (nur wenn im Admin-Bereich freigegeben) */
+  /** Network IDs without a group (only if enabled in the admin area) */
   ungrouped: string[];
   switches: SwitchView[];
   aps: ApView[];
-  /** Geräte-Gruppen in Admin-Reihenfolge (verborgene Gruppen sind nicht enthalten) */
+  /** Device groups in admin order (hidden groups are not included) */
   deviceGroups: DeviceGroupView[];
-  /** IDs nicht gruppierter Switche/APs (leer, wenn im Admin-Bereich ausgeblendet) */
+  /** IDs of ungrouped switches/APs (empty if hidden in the admin area) */
   ungroupedSwitches: string[];
   ungroupedAps: string[];
-  /** Gesetzt, wenn die Antwort auf eine Statusseite eingeschränkt ist */
+  /** Set when the response is restricted to a status page */
   statusPage?: StatusPageInfo;
 }
 
@@ -195,9 +195,9 @@ export interface StatusPageInfo {
   description: string;
   showWan: boolean;
   isPublic: boolean;
-  /** Betrachter ist angemeldet (sonst öffentliche Ansicht ohne Login) */
+  /** Viewer is signed in (otherwise public view without login) */
   loggedIn: boolean;
-  /** Alle Statusseiten, die der Betrachter sehen darf (Navigation) */
+  /** All status pages the viewer may see (navigation) */
   pages: { slug: string; title: string }[];
 }
 
@@ -231,3 +231,9 @@ export interface AdminNetwork {
   anonymizeClients: boolean;
   groupId: number | null;
 }
+
+/**
+ * Masked error code for status pages (the real controller error stays on the server);
+ * the UI shows a translated message for it.
+ */
+export const CONTROLLER_ERROR = 'controller_unreachable';

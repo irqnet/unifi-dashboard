@@ -1,9 +1,9 @@
 /**
- * Flexibler UniFi-API-Client.
- *  - UniFi OS (UDM/UCG/Cloud Key Gen2+/UNVR): API-Key (X-API-KEY) oder Login via /api/auth/login,
- *    Pfad-Präfix /proxy/network, CSRF-Token aus Header x-csrf-token.
- *  - Klassischer Self-Hosted Controller: Login via /api/login, Cookie "unifises" + "csrf_token".
- * Self-Signed-Zertifikate werden über einen eigenen undici-Agent (UNIFI_VERIFY_SSL=false) unterstützt.
+ * Flexible UniFi API client.
+ *  - UniFi OS (UDM/UCG/Cloud Key Gen2+/UNVR): API key (X-API-KEY) or login via /api/auth/login,
+ *    path prefix /proxy/network, CSRF token from the x-csrf-token header.
+ *  - Classic self-hosted controller: login via /api/login, cookies "unifises" + "csrf_token".
+ * Self-signed certificates are supported via a dedicated undici agent (UNIFI_VERIFY_SSL=false).
  */
 import 'server-only';
 import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici';
@@ -23,8 +23,8 @@ export class UniFiError extends Error {
 }
 
 /**
- * Robustes JSON-Parsing: Manche Controller-Firmwares liefern nicht-standardkonforme Zahlen
- * (NaN, Infinity, nan, inf) z. B. in Temperatur- oder Statistikfeldern. Diese werden zu null.
+ * Robust JSON parsing: some controller firmwares return non-standard numbers
+ * (NaN, Infinity, nan, inf), e.g. in temperature or statistics fields. These become null.
  */
 export function parseUniFiJson<T>(text: string, path: string): T {
   try {
@@ -37,8 +37,8 @@ export function parseUniFiJson<T>(text: string, path: string): T {
       const msg = (err as Error).message;
       const pos = Number(/position (\d+)/.exec(msg)?.[1] ?? NaN);
       const ctx = Number.isFinite(pos) ? sanitized.slice(Math.max(0, pos - 80), pos + 80).replace(/\s+/g, ' ') : '';
-      console.error(`[unifi] Ungültiges JSON von ${path} (${text.length} Bytes): ${msg}${ctx ? `\n  Kontext: …${ctx}…` : ''}`);
-      throw new UniFiError(`Ungültige Antwort von ${path}: ${msg}`);
+      console.error(`[unifi] Invalid JSON from ${path} (${text.length} bytes): ${msg}${ctx ? `\n  Context: …${ctx}…` : ''}`);
+      throw new UniFiError(`Invalid response from ${path}: ${msg}`);
     }
   }
 }
@@ -58,7 +58,7 @@ export class UniFiClient {
     if (cfg.controllerType === 'unifios' || cfg.controllerType === 'classic') {
       this.flavor = cfg.controllerType;
     } else if (cfg.apiKey) {
-      this.flavor = 'unifios'; // API-Keys gibt es nur unter UniFi OS
+      this.flavor = 'unifios'; // API keys only exist on UniFi OS
     }
   }
 
@@ -93,7 +93,7 @@ export class UniFiClient {
   }
 
   private async raw(path: string, init: { method?: string; body?: unknown } = {}) {
-    if (!this.cfg.url) throw new UniFiError('UNIFI_CONTROLLER_URL ist nicht gesetzt');
+    if (!this.cfg.url) throw new UniFiError('UNIFI_CONTROLLER_URL is not set');
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
     if (this.cfg.apiKey) headers['X-API-KEY'] = this.cfg.apiKey;
@@ -110,11 +110,11 @@ export class UniFiClient {
     return res;
   }
 
-  /** Erkennt UniFi OS vs. klassischen Controller und meldet sich per Benutzer/Passwort an. */
+  /** Detects UniFi OS vs. classic controller and signs in with username/password. */
   private async login(): Promise<void> {
     if (this.cfg.apiKey) return;
     if (!this.cfg.username || !this.cfg.password) {
-      throw new UniFiError('Weder UNIFI_API_KEY noch UNIFI_USERNAME/UNIFI_PASSWORD konfiguriert');
+      throw new UniFiError('Neither UNIFI_API_KEY nor UNIFI_USERNAME/UNIFI_PASSWORD is configured');
     }
     this.cookies.clear();
     this.csrfToken = null;
@@ -134,7 +134,7 @@ export class UniFiClient {
       if (!res.ok) throw new UniFiError(`UniFi-Login fehlgeschlagen (HTTP ${res.status})`, res.status);
       return;
     }
-    // Auto-Erkennung: zuerst UniFi OS, dann klassischer Controller
+    // Auto-detection: UniFi OS first, then the classic controller
     const os = await tryFlavor('unifios').catch(() => null);
     if (os?.ok) {
       this.flavor = 'unifios';
@@ -159,7 +159,7 @@ export class UniFiClient {
     await this.loginPromise;
   }
 
-  /** GET auf einen Network-API-Pfad (ohne Präfix), automatischer Re-Login bei 401. */
+  /** GET on a Network API path (without prefix), automatic re-login on 401. */
   async get<T>(path: string, retry = true): Promise<T[]> {
     await this.ensureLogin();
     const res = await this.raw(this.prefix() + path);
@@ -174,11 +174,11 @@ export class UniFiClient {
     }
     const json = parseUniFiJson<UniFiEnvelope<T> | T[]>(await res.text(), path);
     if (Array.isArray(json)) return json;
-    if (json.meta?.rc === 'error') throw new UniFiError(`UniFi-API ${path}: ${json.meta.msg ?? 'Fehler'}`);
+    if (json.meta?.rc === 'error') throw new UniFiError(`UniFi API ${path}: ${json.meta.msg ?? 'error'}`);
     return json.data ?? [];
   }
 
-  /** POST auf einen Network-API-Pfad (z. B. cmd/hotspot), automatischer Re-Login bei 401. */
+  /** POST on a Network API path (e.g. cmd/hotspot), automatic re-login on 401. */
   async post<T>(path: string, body: unknown, retry = true): Promise<T[]> {
     await this.ensureLogin();
     const res = await this.raw(this.prefix() + path, { method: 'POST', body });
@@ -195,12 +195,12 @@ export class UniFiClient {
       } catch {
         /* ignore */
       }
-      const hint = res.status === 403 ? ' – hat der UniFi-Benutzer/API-Key Schreibrechte (Hotspot-Verwaltung)?' : '';
+      const hint = res.status === 403 ? ' – does the UniFi user/API key have write permissions (hotspot management)?' : '';
       throw new UniFiError(`UniFi-API ${path}: HTTP ${res.status}${msg ? ` (${msg})` : ''}${hint}`, res.status);
     }
     const json = parseUniFiJson<UniFiEnvelope<T> | T[]>(text || '{}', path);
     if (Array.isArray(json)) return json;
-    if (json.meta?.rc === 'error') throw new UniFiError(`UniFi-API ${path}: ${json.meta.msg ?? 'Fehler'}`);
+    if (json.meta?.rc === 'error') throw new UniFiError(`UniFi API ${path}: ${json.meta.msg ?? 'error'}`);
     return json.data ?? [];
   }
 
@@ -212,7 +212,7 @@ export class UniFiClient {
     return this.get<RawGuest>(`/api/s/${encodeURIComponent(site)}/stat/guest?within=${withinHours}`);
   }
 
-  /** Erstellt Voucher; liefert die create_time, über die die neuen Codes gefunden werden. */
+  /** Creates vouchers; returns the create_time used to find the new codes. */
   createVouchers(
     site: string,
     opts: { count: number; minutes: number; quota: number; note?: string; up?: number; down?: number; megabytes?: number },

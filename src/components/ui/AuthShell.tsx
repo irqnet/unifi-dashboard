@@ -1,9 +1,11 @@
 import { Activity } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { LanguageSwitcher } from '@/components/i18n/I18nProvider';
 
 export function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer?: ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
+    <main className="relative flex min-h-screen items-center justify-center px-4">
+      <LanguageSwitcher className="absolute right-4 top-4" />
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-sky-500/30 bg-sky-500/10">

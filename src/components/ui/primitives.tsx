@@ -1,19 +1,24 @@
+'use client';
+
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
+import type { MessageKey } from '@/lib/i18n/translate';
 import type { SystemStatus } from '@/lib/views';
 
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={clsx('rounded-xl border border-noc-line bg-noc-panel', className)}>{children}</div>;
 }
 
-const STATUS_STYLE: Record<SystemStatus, { label: string; cls: string; dot: string }> = {
-  online: { label: 'Online', cls: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/30', dot: 'bg-emerald-400' },
-  degraded: { label: 'Degraded', cls: 'text-amber-300 bg-amber-500/10 ring-amber-500/30', dot: 'bg-amber-400' },
-  offline: { label: 'Offline', cls: 'text-rose-300 bg-rose-500/10 ring-rose-500/30', dot: 'bg-rose-500' },
-  unknown: { label: 'Unbekannt', cls: 'text-slate-300 bg-slate-500/10 ring-slate-500/30', dot: 'bg-slate-400' },
+const STATUS_STYLE: Record<SystemStatus, { label: MessageKey; cls: string; dot: string }> = {
+  online: { label: 'status.online', cls: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/30', dot: 'bg-emerald-400' },
+  degraded: { label: 'status.degraded', cls: 'text-amber-300 bg-amber-500/10 ring-amber-500/30', dot: 'bg-amber-400' },
+  offline: { label: 'status.offline', cls: 'text-rose-300 bg-rose-500/10 ring-rose-500/30', dot: 'bg-rose-500' },
+  unknown: { label: 'status.unknown', cls: 'text-slate-300 bg-slate-500/10 ring-slate-500/30', dot: 'bg-slate-400' },
 };
 
 export function StatusBadge({ status, label, size = 'md' }: { status: SystemStatus; label?: string; size?: 'sm' | 'md' }) {
+  const t = useT();
   const s = STATUS_STYLE[status];
   return (
     <span
@@ -24,7 +29,7 @@ export function StatusBadge({ status, label, size = 'md' }: { status: SystemStat
       )}
     >
       <span className={clsx('h-1.5 w-1.5 rounded-full', s.dot, status === 'online' && 'animate-pulse')} />
-      {label ?? s.label}
+      {label ?? t(s.label)}
     </span>
   );
 }

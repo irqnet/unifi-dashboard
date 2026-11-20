@@ -1,12 +1,13 @@
 /**
- * SQLite-Persistenz (better-sqlite3) für Admin-Konfiguration und Netzwerk-Gruppen.
- * Datei: ${DATA_DIR}/dashboard.db (Container: /app/data/dashboard.db).
+ * SQLite persistence (better-sqlite3) for admin configuration and network groups.
+ * File: ${DATA_DIR}/dashboard.db (container: /app/data/dashboard.db).
  */
 import 'server-only';
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getConfig } from './env';
+import { DEFAULT_LOCALE, isLocale, type Locale } from './i18n/config';
 import { parseLayout, type TileLayout } from './layout';
 
 export type DisplayMode = 'consolidated' | 'expanded';
@@ -58,9 +59,9 @@ function openFileDb(file: string): Database.Database {
 }
 
 /**
- * Öffnet die SQLite-DB. Ist das Datenverzeichnis nicht beschreibbar, wird mit einer
- * In-Memory-DB weitergearbeitet (Dashboard bleibt nutzbar, Admin-Einstellungen gehen
- * beim Neustart verloren) und eine klare Fehlermeldung geloggt.
+ * Opens the SQLite DB. If the data directory is not writable, an in-memory DB is used
+ * instead (the dashboard stays usable, admin settings are lost on restart) and a clear
+ * error message is logged.
  */
 export function getDb(): Database.Database {
   if (g.__udDb) return g.__udDb;
@@ -74,10 +75,10 @@ export function getDb(): Database.Database {
     const gid = typeof process.getgid === 'function' ? process.getgid() : '?';
     const msg = (err as Error).message;
     console.error(
-      `[db] Datenbank ${file} kann nicht geöffnet werden (${msg}). ` +
-        `Prozess läuft als UID ${uid}/GID ${gid} – das Datenverzeichnis muss für diese UID beschreibbar sein ` +
-        `(Host: "chown -R ${uid}:${gid} <pfad-zu>/data" oder DATA_PATH auf ein benanntes Volume setzen). ` +
-        `Fallback: In-Memory-Datenbank, Admin-Einstellungen werden NICHT gespeichert.`,
+      `[db] Cannot open database ${file} (${msg}). ` +
+        `Process runs as UID ${uid}/GID ${gid} – the data directory must be writable for this UID ` +
+        `(host: "chown -R ${uid}:${gid} <path-to>/data" or set DATA_PATH to a named volume). ` +
+        `Fallback: in-memory database, admin settings will NOT be saved.`,
     );
     db = new Database(':memory:');
     g.__udDbStatus = { persistent: false, path: file, error: `${msg} (UID ${uid})` };
@@ -187,7 +188,7 @@ function migrate(db: Database.Database) {
       page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
       PRIMARY KEY (user_id, page_id)
     );
-    -- Kachel-Layouts: user_id 0 = Standardlayout (vom Admin), sonst Benutzerkonto
+    -- Tile layouts: user_id 0 = default layout (set by an admin), otherwise user account
     CREATE TABLE IF NOT EXISTS dashboard_layouts (
       user_id INTEGER NOT NULL,
       scope TEXT NOT NULL,
@@ -198,9 +199,12 @@ function migrate(db: Database.Database) {
   `);
   const row = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
   if (!row) db.prepare('INSERT INTO schema_version (version) VALUES (1)').run();
+  // v2: per-user language
+  const userCols = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (!userCols.some((c) => c.name === 'language')) db.exec('ALTER TABLE users ADD COLUMN language TEXT');
 }
 
-// --- Gruppen ------------------------------------------------------------------
+// --- Groups --------------------------------------------------------------------
 interface GroupRow {
   id: number;
   site: string;
@@ -243,7 +247,7 @@ export function listGroups(site: string): NetworkGroup[] {
 
 function setMembers(db: Database.Database, groupId: number, site: string, networkIds: string[]) {
   db.prepare('DELETE FROM group_networks WHERE group_id = ?').run(groupId);
-  // Ein Netzwerk kann nur in genau einer Gruppe sein → aus anderen Gruppen entfernen
+  // A network can only be in exactly one group → remove it from other groups
   const del = db.prepare('DELETE FROM group_networks WHERE site = ? AND network_id = ?');
   const ins = db.prepare('INSERT INTO group_networks (group_id, site, network_id) VALUES (?, ?, ?)');
   for (const id of Array.from(new Set(networkIds))) {
@@ -313,7 +317,7 @@ export function reorderGroups(site: string, ids: number[]) {
   db.transaction(() => ids.forEach((id, idx) => stmt.run(idx, id, site)))();
 }
 
-// --- Netzwerk-Einstellungen ---------------------------------------------------
+// --- Network settings -------------------------------------------------------
 export function listNetworkSettings(site: string): Map<string, NetworkSetting> {
   const rows = getDb()
     .prepare('SELECT * FROM network_settings WHERE site = ?')
@@ -335,22 +339,30 @@ export function upsertNetworkSetting(s: NetworkSetting) {
     .run(s.site, s.networkId, s.hidden ? 1 : 0, s.anonymizeClients ? 1 : 0);
 }
 
-// --- Globale Einstellungen ----------------------------------------------------
+// --- Global settings ---------------------------------------------------------
 export interface AppSettings {
   showUngrouped: boolean;
   showUngroupedDevices: boolean;
-  /** Gemeinsamer Zugang (Gate ohne Benutzerkonto) darf die Gesamtansicht sehen */
+  /** Shared access (gate without a user account) may see the full overview */
   allowSharedAccess: boolean;
+  /** Language for visitors without a saved choice whose browser language is not supported */
+  defaultLanguage: Locale;
 }
 
 const BOOL_SETTINGS = ['showUngrouped', 'showUngroupedDevices', 'allowSharedAccess'] as const;
-const DEFAULT_SETTINGS: AppSettings = { showUngrouped: true, showUngroupedDevices: true, allowSharedAccess: true };
+const DEFAULT_SETTINGS: AppSettings = {
+  showUngrouped: true,
+  showUngroupedDevices: true,
+  allowSharedAccess: true,
+  defaultLanguage: DEFAULT_LOCALE,
+};
 
 export function getSettings(): AppSettings {
   const rows = getDb().prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
   const out: AppSettings = { ...DEFAULT_SETTINGS };
   for (const r of rows) {
     if ((BOOL_SETTINGS as readonly string[]).includes(r.key)) out[r.key as (typeof BOOL_SETTINGS)[number]] = r.value === 'true';
+    else if (r.key === 'defaultLanguage' && isLocale(r.value)) out.defaultLanguage = r.value;
   }
   return out;
 }
@@ -360,10 +372,11 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   );
   for (const key of BOOL_SETTINGS) if (patch[key] !== undefined) stmt.run(key, String(patch[key]));
+  if (patch.defaultLanguage && isLocale(patch.defaultLanguage)) stmt.run('defaultLanguage', patch.defaultLanguage);
   return getSettings();
 }
 
-// --- Geräte-Gruppen (Switche & Access Points) ---------------------------------
+// --- Device groups (switches & access points) -------------------------------
 export interface DeviceGroup {
   id: number;
   site: string;
@@ -468,7 +481,7 @@ export function reorderDeviceGroups(site: string, ids: number[]) {
   db.transaction(() => ids.forEach((id, idx) => stmt.run(idx, id, site)))();
 }
 
-// --- Benutzer -------------------------------------------------------------------
+// --- Users ----------------------------------------------------------------------
 export interface User {
   id: number;
   username: string;
@@ -478,6 +491,8 @@ export interface User {
   sessionVersion: number;
   lastLoginAt: string | null;
   createdAt: string;
+  /** Saved UI language (null = not chosen yet) */
+  language: Locale | null;
   pageIds: number[];
 }
 
@@ -491,6 +506,7 @@ interface UserRow {
   session_version: number;
   last_login_at: string | null;
   created_at: string;
+  language: string | null;
 }
 
 function toUser(r: UserRow, pageIds: number[]): User {
@@ -503,6 +519,7 @@ function toUser(r: UserRow, pageIds: number[]): User {
     sessionVersion: r.session_version,
     lastLoginAt: r.last_login_at,
     createdAt: r.created_at,
+    language: isLocale(r.language) ? r.language : null,
     pageIds,
   };
 }
@@ -525,7 +542,7 @@ export function getUser(id: number): User | null {
   return r ? toUser(r, userPageIds(r.id)) : null;
 }
 
-/** Liefert Benutzer + Passwort-Hash für den Login (Benutzername ohne Groß-/Kleinschreibung). */
+/** Returns user + password hash for login (username is case-insensitive). */
 export function findUserForLogin(username: string): { user: User; passwordHash: string } | null {
   const r = getDb().prepare('SELECT * FROM users WHERE username = ?').get(username) as UserRow | undefined;
   return r ? { user: toUser(r, userPageIds(r.id)), passwordHash: r.password_hash } : null;
@@ -533,6 +550,10 @@ export function findUserForLogin(username: string): { user: User; passwordHash: 
 
 export function touchUserLogin(id: number) {
   getDb().prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(id);
+}
+
+export function setUserLanguage(id: number, language: Locale) {
+  getDb().prepare('UPDATE users SET language = ? WHERE id = ?').run(language, id);
 }
 
 export interface UserInput {
@@ -567,7 +588,7 @@ export function updateUser(id: number, input: UserInput): User | null {
   const db = getDb();
   const ex = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
   if (!ex) return null;
-  // Passwortwechsel, Sperre oder Rollenwechsel beenden bestehende Sitzungen
+  // Password change, disabling or role change end existing sessions
   const bump =
     input.passwordHash !== undefined ||
     (input.disabled !== undefined && input.disabled !== !!ex.disabled) ||
@@ -599,7 +620,7 @@ export function countActiveAdmins(): number {
   return (getDb().prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND disabled = 0').get() as { n: number }).n;
 }
 
-// --- Statusseiten ----------------------------------------------------------------
+// --- Status pages --------------------------------------------------------------
 export interface StatusPage {
   id: number;
   site: string;
@@ -672,7 +693,7 @@ export function listStatusPagesForUser(userId: number): StatusPage[] {
 }
 
 function setPageMembers(db: Database.Database, pageId: number, site: string, input: StatusPageInput) {
-  // Nur Gruppen derselben Site übernehmen
+  // Only accept groups of the same site
   if (input.groupIds) {
     db.prepare('DELETE FROM status_page_groups WHERE page_id = ?').run(pageId);
     const ins = db.prepare('INSERT OR IGNORE INTO status_page_groups (page_id, group_id) SELECT ?, id FROM network_groups WHERE id = ? AND site = ?');
@@ -719,7 +740,7 @@ export function updateStatusPage(id: number, input: StatusPageInput): StatusPage
       input.isPublic === undefined ? ex.is_public : input.isPublic ? 1 : 0,
       id,
     );
-    // Bei Site-Wechsel passen die alten Gruppen nicht mehr
+    // After a site change the old groups no longer fit
     const members = site !== ex.site ? { groupIds: input.groupIds ?? [], deviceGroupIds: input.deviceGroupIds ?? [] } : input;
     setPageMembers(db, id, site, members);
   })();
@@ -730,8 +751,8 @@ export function deleteStatusPage(id: number): boolean {
   return getDb().prepare('DELETE FROM status_pages WHERE id = ?').run(id).changes > 0;
 }
 
-// --- Kachel-Layouts -------------------------------------------------------------
-/** user_id 0 steht für das Standardlayout, das ein Admin für alle festlegt. */
+// --- Tile layouts -------------------------------------------------------------
+/** user_id 0 stands for the default layout an admin sets for everyone. */
 export const DEFAULT_LAYOUT_OWNER = 0;
 
 export function getLayout(userId: number, scope: string): TileLayout | null {

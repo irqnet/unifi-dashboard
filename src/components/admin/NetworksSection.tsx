@@ -3,6 +3,8 @@
 import clsx from 'clsx';
 import { ArrowDown, ArrowUp, EyeOff, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
+import type { MessageKey } from '@/lib/i18n/translate';
 import type { AdminNetwork } from '@/lib/views';
 import { GroupEditor, type AdminGroup, type GroupDraft } from './GroupEditor';
 import { ColorDot, EmptyRow, Group, LinkButton, LoadingRow, PageHeader, Pill, PrimaryButton, Row, Switch, SwitchRow, type Api } from './ui';
@@ -17,13 +19,13 @@ const EMPTY_DRAFT: GroupDraft = {
   networkIds: [],
 };
 
-const PURPOSE: Record<string, string> = {
-  corporate: 'Firmennetz',
-  guest: 'Gastnetz',
-  'vlan-only': 'Nur VLAN',
-  wan: 'WAN',
-  'remote-user-vpn': 'VPN',
-  'site-vpn': 'Site-VPN',
+const PURPOSE: Record<string, MessageKey> = {
+  corporate: 'networks.purpose.corporate',
+  guest: 'networks.purpose.guest',
+  'vlan-only': 'networks.purpose.vlanOnly',
+  wan: 'networks.purpose.wan',
+  'remote-user-vpn': 'networks.purpose.vpn',
+  'site-vpn': 'networks.purpose.siteVpn',
 };
 
 export function NetworksSection({
@@ -45,6 +47,7 @@ export function NetworksSection({
   onControllerError: (e: string | null) => void;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [networks, setNetworks] = useState<AdminNetwork[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,34 +126,34 @@ export function NetworksSection({
   return (
     <>
       <PageHeader
-        title="Netzwerke"
-        lead="Fasse VLANs zu Gruppen zusammen und lege fest, was auf dem Dashboard erscheint."
+        title={t('nav.networks')}
+        lead={t('networks.lead')}
         action={
           <PrimaryButton onClick={() => setEditing('new')}>
-            <Plus className="h-4 w-4" /> Gruppe
+            <Plus className="h-4 w-4" /> {t('networks.group')}
           </PrimaryButton>
         }
       />
 
       <Group
-        title="Gruppen"
+        title={t('networks.groups')}
         aside={
           groups.length > 1 && (
-            <LinkButton onClick={() => setReorder((r) => !r)}>{reorder ? 'Fertig' : 'Reihenfolge ändern'}</LinkButton>
+            <LinkButton onClick={() => setReorder((r) => !r)}>{reorder ? t('common.done') : t('admin.reorder')}</LinkButton>
           )
         }
-        footer={groups.length > 0 ? 'In dieser Reihenfolge erscheinen die Gruppen auf dem Dashboard.' : undefined}
+        footer={groups.length > 0 ? t('networks.orderHint') : undefined}
       >
         {loading && !groups.length && <LoadingRow />}
         {!loading && !groups.length && (
-          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>Erste Gruppe anlegen</LinkButton>}>
-            Fasse zusammengehörige VLANs wie „Gäste &amp; Nachbarn“ oder „Smart Home &amp; IoT“ zu einer Karte zusammen.
+          <EmptyRow action={<LinkButton onClick={() => setEditing('new')}>{t('networks.createFirst')}</LinkButton>}>
+            {t('networks.emptyHint')}
           </EmptyRow>
         )}
         {groups.map((g, idx) => {
           const names = g.networkIds.map((id) => {
             const n = netById.get(id);
-            return n ? (n.vlan ? `${n.name} ${n.vlan}` : n.name) : 'Unbekanntes Netz';
+            return n ? (n.vlan ? `${n.name} ${n.vlan}` : n.name) : t('networks.unknown');
           });
           const missing = g.networkIds.some((id) => !netById.has(id));
           return (
@@ -158,27 +161,27 @@ export function NetworksSection({
               key={g.id}
               icon={<ColorDot color={g.color} />}
               title={g.name}
-              subtitle={names.length ? names.join(', ') : 'Keine Netzwerke zugeordnet'}
+              subtitle={names.length ? names.join(', ') : t('networks.noneAssigned')}
               onClick={reorder ? undefined : () => setEditing(g.id)}
               chevron={!reorder}
               dim={g.hidden}
               detail={
                 !reorder && (
                   <>
-                    {missing && <Pill tone="danger">Netz fehlt</Pill>}
-                    {g.hidden && <Pill icon={<EyeOff className="h-3 w-3" />}>ausgeblendet</Pill>}
-                    {g.anonymizeClients && <Pill tone="warn">anonymisiert</Pill>}
-                    <span className="hidden sm:inline">{g.displayMode === 'consolidated' ? 'Zusammengefasst' : 'Einzeln'}</span>
+                    {missing && <Pill tone="danger">{t('networks.missing')}</Pill>}
+                    {g.hidden && <Pill icon={<EyeOff className="h-3 w-3" />}>{t('admin.hidden')}</Pill>}
+                    {g.anonymizeClients && <Pill tone="warn">{t('admin.anonymized')}</Pill>}
+                    <span className="hidden sm:inline">{g.displayMode === 'consolidated' ? t('networks.consolidated') : t('networks.expanded')}</span>
                   </>
                 )
               }
             >
               {reorder && (
                 <div className="flex gap-1">
-                  <ReorderButton label="Nach oben" disabled={idx === 0} onClick={() => void move(idx, -1)}>
+                  <ReorderButton label={t('admin.moveUp')} disabled={idx === 0} onClick={() => void move(idx, -1)}>
                     <ArrowUp className="h-4 w-4" />
                   </ReorderButton>
-                  <ReorderButton label="Nach unten" disabled={idx === groups.length - 1} onClick={() => void move(idx, 1)}>
+                  <ReorderButton label={t('admin.moveDown')} disabled={idx === groups.length - 1} onClick={() => void move(idx, 1)}>
                     <ArrowDown className="h-4 w-4" />
                   </ReorderButton>
                 </div>
@@ -188,10 +191,10 @@ export function NetworksSection({
         })}
       </Group>
 
-      <Group title="Alle Netzwerke" aside="live vom Controller">
+      <Group title={t('networks.all')} aside={t('admin.liveFromController')}>
         {loading && !networks.length && <LoadingRow />}
-        {!loading && !networks.length && <EmptyRow>Der Controller hat keine Netzwerke geliefert.</EmptyRow>}
-        {/* Handy: Liste statt Tabelle */}
+        {!loading && !networks.length && <EmptyRow>{t('networks.noneFromController')}</EmptyRow>}
+        {/* Phone: list instead of table */}
         {networks.map((n) => {
           const g = n.groupId !== null ? groupById.get(n.groupId) : undefined;
           return (
@@ -202,15 +205,15 @@ export function NetworksSection({
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-noc-muted">
                 {g && <span className="h-2 w-2 rounded-full" style={{ background: g.color }} />}
-                <span className="truncate">{g ? g.name : 'Keine Gruppe'}</span>
+                <span className="truncate">{g ? g.name : t('networks.noGroup')}</span>
                 <span className="ml-auto font-mono text-[12px]">{n.subnet ?? ''}</span>
               </div>
               <div className="mt-2.5 flex gap-6 text-[13px] text-noc-text">
                 <span className="flex items-center gap-2">
-                  <Switch label={`${n.name} anzeigen`} checked={!n.hidden} onChange={(v) => void updateNetwork(n, { hidden: !v })} /> Anzeigen
+                  <Switch label={t('networks.showLabel', { name: n.name })} checked={!n.hidden} onChange={(v) => void updateNetwork(n, { hidden: !v })} /> {t('networks.show')}
                 </span>
                 <span className="flex items-center gap-2">
-                  <Switch label={`${n.name} anonymisieren`} checked={n.anonymizeClients} onChange={(v) => void updateNetwork(n, { anonymizeClients: v })} /> Anonym
+                  <Switch label={t('networks.anonymizeLabel', { name: n.name })} checked={n.anonymizeClients} onChange={(v) => void updateNetwork(n, { anonymizeClients: v })} /> {t('networks.anonymous')}
                 </span>
               </div>
             </div>
@@ -221,12 +224,12 @@ export function NetworksSection({
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-fg/[0.06] text-left text-[12px] text-noc-muted">
-                  <th className="px-3.5 py-2 font-medium">Name</th>
+                  <th className="px-3.5 py-2 font-medium">{t('common.name')}</th>
                   <th className="px-3 py-2 font-medium">VLAN</th>
-                  <th className="px-3 py-2 font-medium">Subnetz</th>
-                  <th className="px-3 py-2 font-medium">Gruppe</th>
-                  <th className="w-24 px-3 py-2 text-center font-medium">Anzeigen</th>
-                  <th className="w-24 px-3.5 py-2 text-center font-medium">Anonym</th>
+                  <th className="px-3 py-2 font-medium">{t('networks.subnet')}</th>
+                  <th className="px-3 py-2 font-medium">{t('networks.group')}</th>
+                  <th className="w-24 px-3 py-2 text-center font-medium">{t('networks.show')}</th>
+                  <th className="w-24 px-3.5 py-2 text-center font-medium">{t('networks.anonymous')}</th>
                 </tr>
               </thead>
               <tbody className="[&>tr+tr]:border-t [&>tr+tr]:border-fg/[0.06]">
@@ -236,7 +239,7 @@ export function NetworksSection({
                     <tr key={n.id}>
                       <td className={clsx('px-3.5 py-2.5', n.hidden && 'opacity-55')}>
                         <div className="font-medium text-noc-text">{n.name}</div>
-                        <div className="text-[12px] text-noc-muted">{PURPOSE[n.purpose] ?? n.purpose}</div>
+                        <div className="text-[12px] text-noc-muted">{PURPOSE[n.purpose] ? t(PURPOSE[n.purpose]) : n.purpose}</div>
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[12.5px] text-noc-muted">{n.vlan ?? '–'}</td>
                       <td className="px-3 py-2.5 font-mono text-[12.5px] text-noc-muted">{n.subnet ?? '–'}</td>
@@ -247,14 +250,14 @@ export function NetworksSection({
                             {g.name}
                           </span>
                         ) : (
-                          <span className="text-noc-faint">Keine</span>
+                          <span className="text-noc-faint">{t('common.none')}</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-center">
-                        <Switch label={`${n.name} anzeigen`} checked={!n.hidden} onChange={(v) => void updateNetwork(n, { hidden: !v })} />
+                        <Switch label={t('networks.showLabel', { name: n.name })} checked={!n.hidden} onChange={(v) => void updateNetwork(n, { hidden: !v })} />
                       </td>
                       <td className="px-3.5 py-2.5 text-center">
-                        <Switch label={`${n.name} anonymisieren`} checked={n.anonymizeClients} onChange={(v) => void updateNetwork(n, { anonymizeClients: v })} />
+                        <Switch label={t('networks.anonymizeLabel', { name: n.name })} checked={n.anonymizeClients} onChange={(v) => void updateNetwork(n, { anonymizeClients: v })} />
                       </td>
                     </tr>
                   );
@@ -265,8 +268,8 @@ export function NetworksSection({
         )}
       </Group>
 
-      <Group footer="Ausgeschaltet erscheinen nur Netzwerke, die einer Gruppe angehören.">
-        <SwitchRow title="Netzwerke ohne Gruppe anzeigen" subtitle="Als einzelne Karten auf dem Dashboard." checked={showUngrouped} onChange={onShowUngrouped} />
+      <Group footer={t('networks.ungroupedFooter')}>
+        <SwitchRow title={t('networks.showUngrouped')} subtitle={t('networks.showUngroupedHint')} checked={showUngrouped} onChange={onShowUngrouped} />
       </Group>
 
       {editing === 'new' && (

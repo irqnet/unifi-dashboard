@@ -1,11 +1,13 @@
 'use client';
 
 import { Radio, Router } from 'lucide-react';
+import { useT } from '@/components/i18n/I18nProvider';
+import type { TFunction } from '@/lib/i18n/translate';
 import type { ApView, DashboardPayload, SwitchView } from '@/lib/views';
 import { ApCard, SpeedLegend, SwitchCard } from './HardwareCards';
 import type { TileDef } from './TileGrid';
 
-// Raster richten sich nach der Kachelbreite (Container Queries), nicht nach dem Bildschirm
+// Grids follow the tile width (container queries), not the screen
 function SwitchGrid({ items }: { items: SwitchView[] }) {
   return (
     <div className="grid gap-3 @4xl:grid-cols-2">
@@ -26,7 +28,7 @@ function ApGrid({ items }: { items: ApView[] }) {
   );
 }
 
-const online = (list: { online: boolean }[]) => `${list.filter((d) => d.online).length}/${list.length} online`;
+const online = (list: { online: boolean }[], t: TFunction) => t('hardware.onlineCount', { up: list.filter((d) => d.online).length, total: list.length });
 
 function HardwareTile({ color, title, meta, legend, children }: { color?: string; title: React.ReactNode; meta?: React.ReactNode; legend?: boolean; children: React.ReactNode }) {
   return (
@@ -51,15 +53,16 @@ export function hasHardware(data: DashboardPayload) {
 }
 
 export function HardwareEmpty() {
+  const t = useT();
   return (
     <div className="rounded-xl border border-dashed border-noc-line p-8 text-center text-sm text-noc-muted">
-      Keine Switche oder Access Points zur Anzeige. Prüfe im Admin-Bereich die Geräte-Gruppen und die Option für nicht gruppierte Geräte.
+      {t('hardware.empty')}
     </div>
   );
 }
 
-/** Hardware als Kacheln: je Admin-Geräte-Gruppe eine, danach nicht gruppierte Switche und Access Points. */
-export function hardwareTiles(data: DashboardPayload): TileDef[] {
+/** Hardware as tiles: one per admin device group, then ungrouped switches and access points. */
+export function hardwareTiles(data: DashboardPayload, t: TFunction): TileDef[] {
   const swById = new Map(data.switches.map((s) => [s.id, s]));
   const apById = new Map(data.aps.map((a) => [a.id, a]));
   const ungroupedSw = data.ungroupedSwitches.map((id) => swById.get(id)).filter((x): x is SwitchView => !!x);
@@ -91,7 +94,7 @@ export function hardwareTiles(data: DashboardPayload): TileDef[] {
           legend={showLegend}
           meta={
             <>
-              <span className={offline ? 'text-xs text-rose-300' : 'text-xs text-noc-muted'}>{online(all)}</span>
+              <span className={offline ? 'text-xs text-rose-300' : 'text-xs text-noc-muted'}>{online(all, t)}</span>
               {sws.length > 0 && (
                 <span className="flex items-center gap-1 text-xs text-noc-muted">
                   <Router className="h-3 w-3" /> {sws.length}
@@ -119,17 +122,17 @@ export function hardwareTiles(data: DashboardPayload): TileDef[] {
     const showLegend = legend();
     tiles.push({
       id: 'hw:switches',
-      title: hasGroups ? 'Weitere Switche' : 'Switche',
+      title: hasGroups ? t('hardware.moreSwitches') : t('hardware.switches'),
       w: 12,
       h: 2,
       render: () => (
         <HardwareTile
           title={
             <span className="flex items-center gap-2">
-              <Router className="h-4 w-4 text-noc-muted" /> {hasGroups ? 'Weitere Switche' : 'Switche'}
+              <Router className="h-4 w-4 text-noc-muted" /> {hasGroups ? t('hardware.moreSwitches') : t('hardware.switches')}
             </span>
           }
-          meta={<span className="text-xs text-noc-muted">{online(ungroupedSw)}</span>}
+          meta={<span className="text-xs text-noc-muted">{online(ungroupedSw, t)}</span>}
           legend={showLegend}
         >
           <SwitchGrid items={ungroupedSw} />
@@ -141,17 +144,17 @@ export function hardwareTiles(data: DashboardPayload): TileDef[] {
   if (ungroupedAp.length > 0) {
     tiles.push({
       id: 'hw:aps',
-      title: hasGroups ? 'Weitere Access Points' : 'Access Points',
+      title: hasGroups ? t('hardware.moreAps') : t('hardware.aps'),
       w: 12,
       h: 2,
       render: () => (
         <HardwareTile
           title={
             <span className="flex items-center gap-2">
-              <Radio className="h-4 w-4 text-noc-muted" /> {hasGroups ? 'Weitere Access Points' : 'Access Points'}
+              <Radio className="h-4 w-4 text-noc-muted" /> {hasGroups ? t('hardware.moreAps') : t('hardware.aps')}
             </span>
           }
-          meta={<span className="text-xs text-noc-muted">{online(ungroupedAp)}</span>}
+          meta={<span className="text-xs text-noc-muted">{online(ungroupedAp, t)}</span>}
         >
           <ApGrid items={ungroupedAp} />
         </HardwareTile>

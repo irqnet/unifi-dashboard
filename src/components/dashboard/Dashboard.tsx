@@ -2,8 +2,9 @@
 
 import { AlertTriangle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useT } from '@/components/i18n/I18nProvider';
 import { resolveOrder, type TileLayout } from '@/lib/layout';
-import type { DashboardPayload } from '@/lib/views';
+import { CONTROLLER_ERROR, type DashboardPayload } from '@/lib/views';
 import { DashboardHeader } from './DashboardHeader';
 import { DetailDrawer } from './DetailDrawer';
 import { EditBar } from './EditBar';
@@ -42,9 +43,10 @@ export function Dashboard({
 }: {
   defaultRefreshMs: number;
   view: DashboardView;
-  /** Abweichende Datenquelle (Statusseite: /api/status/<slug>) */
+  /** Alternative data source (status page: /api/status/<slug>) */
   endpoint?: string;
 }) {
+  const t = useT();
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [site, setSite] = useState<string>('');
   const [refreshMs, setRefreshMs] = useState(defaultRefreshMs);
@@ -76,7 +78,7 @@ export function Dashboard({
       const url = endpoint ?? `/api/unifi/dashboard${site ? `?site=${encodeURIComponent(site)}` : ''}`;
       const res = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
       if (endpoint && (res.status === 401 || res.status === 403)) {
-        // Statusseite: Server zeigt Login bzw. „Kein Zugriff“
+        // Status page: the server shows the login or "no access" page
         window.location.reload();
         return;
       }
@@ -134,32 +136,32 @@ export function Dashboard({
 
   const tiles: TileDef[] = useMemo(() => {
     if (!data) return [];
-    const kpis = kpiTiles(data).map((t) => ({ ...t, section: 'kpi' }));
-    // WAN-Bereich: eine Kachel je Internetanbieter, nebeneinander
+    const kpis = kpiTiles(data, t).map((k) => ({ ...k, section: 'kpi' }));
+    // WAN area: one tile per internet provider, side by side
     const links = data.wans ?? [];
     const wanW = links.length >= 3 ? 4 : links.length === 2 ? 6 : 12;
     const wans: TileDef[] = links.map((l) => ({
       id: `wan:${l.key}`,
-      title: links.length > 1 ? `WAN ${l.name}` : 'WAN-Durchsatz',
+      title: links.length > 1 ? `WAN ${l.name}` : t('wan.throughput'),
       w: wanW,
       h: 2,
       section: 'wan',
       fullBelowLg: true,
       render: () => <WanPanel wan={data.wan} link={links.length > 1 ? l : undefined} />,
     }));
-    const inNet = (t: TileDef): TileDef => ({ ...t, section: 'net' });
+    const inNet = (tile: TileDef): TileDef => ({ ...tile, section: 'net' });
     if (view === 'network') {
-      return [...kpis, ...wans, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open }).map(inNet)];
+      return [...kpis, ...wans, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open, t }).map(inNet)];
     }
-    if (view === 'hardware') return [...kpis, ...hardwareTiles(data)];
+    if (view === 'hardware') return [...kpis, ...hardwareTiles(data, t)];
     const showWan = !!data.statusPage?.showWan;
-    const nets = networkTiles({ groups: data.groups, networks: data.networks, ungrouped: [], onOpen: open }).map(inNet);
+    const nets = networkTiles({ groups: data.groups, networks: data.networks, ungrouped: [], onOpen: open, t }).map(inNet);
     return [
       ...(showWan ? [...kpis, ...wans] : []),
       ...nets,
-      ...(data.deviceGroups.length ? hardwareTiles(data).map((t) => ({ ...t, section: 'hw' })) : []),
+      ...(data.deviceGroups.length ? hardwareTiles(data, t).map((h) => ({ ...h, section: 'hw' })) : []),
     ];
-  }, [data, view, open]);
+  }, [data, view, open, t]);
 
   const sections: TileSection[] | undefined = useMemo(() => {
     if (view === 'hardware') return undefined;
@@ -167,14 +169,14 @@ export function Dashboard({
     const mode = data?.wans?.[0]?.mode;
     return [
       { id: 'kpi' },
-      { id: 'wan', title: !multi ? 'WAN' : mode === 'failover' ? 'WAN · Failover' : mode === 'loadbalance' ? 'WAN · Loadbalancing' : 'WAN · Internetanbieter' },
-      { id: 'net', title: 'Netzwerke' },
-      ...(view === 'status' ? [{ id: 'hw', title: 'Hardware' }] : []),
+      { id: 'wan', title: !multi ? 'WAN' : mode === 'failover' ? 'WAN · Failover' : mode === 'loadbalance' ? `WAN · ${t('wan.loadBalancing')}` : `WAN · ${t('wan.providers')}` },
+      { id: 'net', title: t('nav.networks') },
+      ...(view === 'status' ? [{ id: 'hw', title: t('nav.hardware') }] : []),
     ];
-  }, [view, data?.wans]);
+  }, [view, data?.wans, t]);
 
   const active = editing && draft ? draft : tl.layout;
-  const order = useMemo(() => resolveOrder(tiles.map((t) => t.id), active), [tiles, active]);
+  const order = useMemo(() => resolveOrder(tiles.map((tile) => tile.id), active), [tiles, active]);
 
   const startEdit = () => {
     setDraftState({ ...tl.layout, order });
@@ -223,8 +225,8 @@ export function Dashboard({
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <div className="font-medium">Verbindung zum UniFi Controller gestört</div>
-              <div className="text-amber-200/80">{error}</div>
+              <div className="font-medium">{t('dashboard.controllerError')}</div>
+              {error !== CONTROLLER_ERROR && <div className="text-amber-200/80">{error}</div>}
             </div>
           </div>
         )}
@@ -240,7 +242,7 @@ export function Dashboard({
             onChange={setDraft}
             onCancel={stopEdit}
             onDone={() => {
-              // Nach „Zurücksetzen“ ohne weitere Änderung kein eigenes Layout anlegen
+              // After "reset" without further changes, don't create an own layout
               if (dirty) void tl.save({ ...draft, order });
               stopEdit();
             }}
@@ -278,9 +280,7 @@ export function Dashboard({
             <HardwareEmpty />
           ) : (
             <div className="rounded-xl border border-dashed border-noc-line p-8 text-center text-sm text-noc-muted">
-              {view === 'network'
-                ? 'Keine Netzwerke freigegeben. Im Admin-Bereich können Gruppen angelegt oder nicht gruppierte VLANs eingeblendet werden.'
-                : 'Dieser Statusseite sind noch keine Gruppen zugeordnet.'}
+              {view === 'network' ? t('dashboard.emptyNetworks') : t('dashboard.emptyStatusPage')}
             </div>
           ))}
       </main>
