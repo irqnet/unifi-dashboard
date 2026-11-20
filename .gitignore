@@ -1,4 +1,4 @@
-# Abhängigkeiten
+# Dependencies
 node_modules/
 .pnp
 .pnp.js
@@ -13,12 +13,12 @@ next-env.d.ts
 build/
 dist/
 
-# Umgebungsvariablen / Secrets
+# Environment variables / secrets
 .env
 .env.*
 !.env.example
 
-# SQLite-Datenbank (persistentes Volume)
+# SQLite database (persistent volume)
 data/*.db
 data/*.db-wal
 data/*.db-shm
