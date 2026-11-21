@@ -8,7 +8,7 @@
 import 'server-only';
 import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici';
 import { getConfig } from '../env';
-import type { RawClient, RawDevice, RawGuest, RawHealth, RawNetwork, RawSite, RawVoucher, SiteRawData, UniFiEnvelope } from './types';
+import type { RawClient, RawDevice, RawGuest, RawHealth, RawNetwork, RawSite, RawSpeedtest, RawVoucher, SiteRawData, UniFiEnvelope } from './types';
 
 type Flavor = 'unifios' | 'classic';
 
@@ -254,6 +254,15 @@ export class UniFiClient {
 
   health(site: string) {
     return this.get<RawHealth>(`/api/s/${encodeURIComponent(site)}/stat/health`);
+  }
+
+  /** Speedtest history (v2 API, UniFi OS only). Empty on controllers without it. */
+  async speedtests(site: string): Promise<RawSpeedtest[]> {
+    try {
+      return await this.get<RawSpeedtest>(`/v2/api/site/${encodeURIComponent(site)}/speedtest`);
+    } catch {
+      return [];
+    }
   }
 
   async siteData(site: string): Promise<SiteRawData> {
