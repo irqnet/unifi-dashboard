@@ -457,11 +457,16 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
   const degradedByPartial = !st.error && !!st.partialError;
   const wanIp = wanH?.wan_ip ?? gwDev?.wan1?.ip ?? null;
 
-  const xd = num(wwwH?.xput_down);
-  const xu = num(wwwH?.xput_up);
+  const activeWanNet = findActiveWan(data.networks, gwDev, wanIp);
+  // Newer firmware leaves xput_* at 0 in stat/health: fall back to the latest v2 speedtest of the active WAN.
+  const tests = [...(data.speedtests ?? [])].sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+  const lastTest = tests.find((s) => activeWanNet && (s.wan_networkgroup ?? '').toUpperCase() === wanKey(activeWanNet)) ?? tests[0];
+  const healthXd = num(wwwH?.xput_down);
+  const useTest = !(healthXd && healthXd > 0) && !!lastTest;
+  const xd = useTest ? num(lastTest!.download_mbps) : healthXd;
+  const xu = useTest ? num(lastTest!.upload_mbps) : num(wwwH?.xput_up);
   const peakDown = Math.max(0, ...samples.map((x) => x.wanDown));
   const peakUp = Math.max(0, ...samples.map((x) => x.wanUp));
-  const activeWanNet = findActiveWan(data.networks, gwDev, wanIp);
   const caps = activeWanNet?.wan_provider_capabilities;
   const expDown = num(caps?.download_kilobits_per_second);
   const expUp = num(caps?.upload_kilobits_per_second);
@@ -482,8 +487,8 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
     ip: mask ? maskIp(wanIp) : wanIp,
     isp: wanH?.isp_name ?? null,
     latency: num(wwwH?.latency) ?? num(wwwH?.speedtest_ping),
-    xputDown: num(wwwH?.xput_down),
-    xputUp: num(wwwH?.xput_up),
+    xputDown: xd,
+    xputUp: xu,
     down: latest?.wanDown ?? 0,
     up: latest?.wanUp ?? 0,
     history: samples.map((s) => ({ t: s.t, down: s.wanDown, up: s.wanUp, clients: 0 })),
