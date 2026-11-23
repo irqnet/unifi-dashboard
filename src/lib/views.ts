@@ -220,6 +220,14 @@ export interface AdminDevice {
   groupId: number | null;
 }
 
+/** WAN connection in the admin area with the detected and the manually set provider. */
+export interface AdminWan {
+  key: string;
+  name: string;
+  detectedProvider: string | null;
+  provider: string | null;
+}
+
 export interface AdminNetwork {
   id: string;
   name: string;

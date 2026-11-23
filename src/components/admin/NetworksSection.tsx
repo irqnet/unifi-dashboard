@@ -5,9 +5,9 @@ import { ArrowDown, ArrowUp, EyeOff, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/components/i18n/I18nProvider';
 import type { MessageKey } from '@/lib/i18n/translate';
-import type { AdminNetwork } from '@/lib/views';
+import type { AdminNetwork, AdminWan } from '@/lib/views';
 import { GroupEditor, type AdminGroup, type GroupDraft } from './GroupEditor';
-import { ColorDot, EmptyRow, Group, LinkButton, LoadingRow, PageHeader, Pill, PrimaryButton, Row, Switch, SwitchRow, type Api } from './ui';
+import { ColorDot, EmptyRow, Group, LinkButton, LoadingRow, PageHeader, Pill, PrimaryButton, Row, Switch, SwitchRow, TextInput, type Api } from './ui';
 
 const EMPTY_DRAFT: GroupDraft = {
   name: '',
@@ -49,6 +49,7 @@ export function NetworksSection({
 }) {
   const t = useT();
   const [networks, setNetworks] = useState<AdminNetwork[]>([]);
+  const [wans, setWans] = useState<AdminWan[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<number | 'new' | null>(null);
@@ -58,10 +59,12 @@ export function NetworksSection({
     if (!site) return;
     setLoading(true);
     const q = `?site=${encodeURIComponent(site)}`;
-    const [n, g] = await Promise.all([
+    const [n, g, w] = await Promise.all([
       api<{ networks: AdminNetwork[]; error: string | null }>(`/api/admin/networks${q}`),
       api<{ groups: AdminGroup[] }>(`/api/admin/groups${q}`),
+      api<{ wans: AdminWan[] }>(`/api/admin/wans${q}`),
     ]);
+    if (w.data) setWans(w.data.wans);
     if (n.data) {
       setNetworks(n.data.networks);
       onControllerError(n.data.error);
@@ -117,6 +120,15 @@ export function NetworksSection({
       body: JSON.stringify({ site, networkId: n.id, hidden: next.hidden, anonymizeClients: next.anonymizeClients }),
     });
     if (res.error) onError(res.error);
+  };
+
+  const saveProvider = async (w: AdminWan, value: string) => {
+    const provider = value.trim() || null;
+    if (provider === w.provider) return;
+    setWans((list) => list.map((x) => (x.key === w.key ? { ...x, provider } : x)));
+    const res = await api('/api/admin/wans', { method: 'PUT', body: JSON.stringify({ site, key: w.key, provider: provider ?? '' }) });
+    if (res.error) onError(res.error);
+    else onChanged();
   };
 
   const netById = new Map(networks.map((n) => [n.id, n]));
@@ -190,6 +202,33 @@ export function NetworksSection({
           );
         })}
       </Group>
+
+      {wans.length > 0 && (
+        <Group title={t('networks.wans')} footer={t('networks.wansFooter')}>
+          {wans.map((w) => (
+            <div key={w.key} className="flex flex-col gap-1.5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+              <div className="min-w-0 sm:w-56">
+                <div className="truncate font-medium text-noc-text">{w.name}</div>
+                <div className="truncate text-[12px] text-noc-muted">
+                  {w.key === 'WAN' ? 'WAN1' : w.key} · {w.detectedProvider ? t('networks.wanDetected', { provider: w.detectedProvider }) : t('networks.wanNotDetected')}
+                </div>
+              </div>
+              <TextInput
+                key={`${w.key}:${w.provider ?? ''}`}
+                aria-label={t('networks.wanProviderLabel', { name: w.name })}
+                placeholder={w.detectedProvider ?? t('networks.wanProvider')}
+                defaultValue={w.provider ?? ''}
+                maxLength={60}
+                className="min-w-0 flex-1"
+                onBlur={(e) => void saveProvider(w, e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+              />
+            </div>
+          ))}
+        </Group>
+      )}
 
       <Group title={t('networks.all')} aside={t('admin.liveFromController')}>
         {loading && !networks.length && <LoadingRow />}

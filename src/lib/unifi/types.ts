@@ -81,6 +81,8 @@ export interface RawDevice {
   wan1?: RawWanPort;
   wan2?: RawWanPort;
   wan3?: RawWanPort;
+  /** Per-WAN geo lookup of the public IP (UniFi OS gateways), keyed by WAN, WAN2 … */
+  geo_info?: Record<string, { isp_name?: string; isp_organization?: string } | undefined>;
 }
 
 /** WAN connection on the gateway (stat/device: wan1, wan2 …) */

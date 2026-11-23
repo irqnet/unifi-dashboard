@@ -4,10 +4,11 @@
  */
 import 'server-only';
 import { getConfig } from '../env';
-import { getSettings, listDeviceGroups, listGroups, listNetworkSettings, type StatusPage } from '../db';
+import { getSettings, listDeviceGroups, listGroups, listNetworkSettings, listWanProviders, type StatusPage } from '../db';
 import type {
   AdminDevice,
   AdminNetwork,
+  AdminWan,
   DeviceGroupView,
   ApView,
   ClientCounts,
@@ -116,6 +117,12 @@ function overallStatus(error: string | null, health: { subsystem: string; status
 
 const wanKey = (n: RawNetwork) => (n.wan_networkgroup ?? 'WAN').toUpperCase();
 
+/** Provider name of one WAN connection from the gateway's per-WAN geo lookup. */
+function detectedProvider(gw: RawDevice | undefined, key: string): string | null {
+  const geo = gw?.geo_info?.[key] ?? (key === 'WAN' ? gw?.geo_info?.WAN1 : undefined);
+  return geo?.isp_name || geo?.isp_organization || null;
+}
+
 /**
  * WAN connections individually. With a single connection the entry equals the overall view.
  * If the gateway provides no per-connection throughput, the active WAN gets the total.
@@ -127,16 +134,19 @@ function wanLinks(
   total: WanView,
   samples: Sample[],
   mask: boolean,
+  providers: Map<string, string>,
 ): WanLinkView[] {
   const nets = networks
     .filter((n) => n.purpose === 'wan' && n.enabled !== false)
     .sort((a, b) => wanKey(a).localeCompare(wanKey(b), 'en', { numeric: true }));
   if (nets.length <= 1) {
     const n = nets[0] ?? activeNet;
+    const key = n ? wanKey(n) : 'WAN';
     return [
       {
         ...total,
-        key: n ? wanKey(n) : 'WAN',
+        key,
+        isp: providers.get(key) ?? detectedProvider(gw, key) ?? total.isp,
         name: n?.name || total.activeWan || 'WAN',
         isActive: true,
         mode: null,
@@ -176,7 +186,9 @@ function wanLinks(
       isActive,
       status,
       ip: mask ? maskIp(ip) : ip,
-      isp: isActive ? total.isp : null,
+      // stat/health only knows one gateway-wide ISP name (usually that of the primary WAN):
+      // never attach it to a backup link, rather show nothing.
+      isp: providers.get(key) ?? detectedProvider(gw, key) ?? (key === 'WAN' && isActive ? total.isp : null),
       latency: isActive ? total.latency : null,
       down: last?.down ?? 0,
       up: last?.up ?? 0,
@@ -502,7 +514,8 @@ export async function buildDashboard(site: string, isAdmin: boolean, scope?: Das
     expectedDown,
     expectedUp,
   };
-  const wans = wanLinks(data.networks, gwDev, activeWanNet, wan, samples, mask);
+  const wans = wanLinks(data.networks, gwDev, activeWanNet, wan, samples, mask, listWanProviders(site));
+  wan.isp = (wans.find((l) => l.isActive) ?? wans[0])?.isp ?? null;
   const gateway: GatewayView = {
     name: gwDev?.name ?? wanH?.gw_name ?? null,
     model: gwDev?.model_name ?? gwDev?.model ?? null,
@@ -611,6 +624,31 @@ export async function buildAdminNetworks(site: string): Promise<{ networks: Admi
     groupId: groupOf.get(n._id) ?? null,
   }));
   return { networks, error: st.error };
+}
+
+/** WAN connections for the admin area: detected provider and the manually set one. */
+export async function buildAdminWans(site: string): Promise<{ wans: AdminWan[] }> {
+  const poller = getPoller();
+  await poller.ensureStarted();
+  const st = poller.getState(site);
+  if (!st.data) await poller.pollSite(site);
+  const data = st.data;
+  const gw = data?.devices.find((d) => ['ugw', 'udm', 'uxg'].includes(d.type));
+  const providers = listWanProviders(site);
+  const wanH = data?.health.find((h) => h.subsystem === 'wan');
+  const nets = (data?.networks ?? [])
+    .filter((n) => n.purpose === 'wan' && n.enabled !== false)
+    .sort((a, b) => wanKey(a).localeCompare(wanKey(b), 'en', { numeric: true }));
+  const wans = nets.map((n) => {
+    const key = wanKey(n);
+    return {
+      key,
+      name: n.name || key,
+      detectedProvider: detectedProvider(gw, key) ?? (nets.length === 1 || key === 'WAN' ? (wanH?.isp_name ?? null) : null),
+      provider: providers.get(key) ?? null,
+    };
+  });
+  return { wans };
 }
 
 /** Device list (switches & APs) for the admin area incl. group assignment. */

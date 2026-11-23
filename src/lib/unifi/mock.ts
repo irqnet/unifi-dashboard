@@ -102,6 +102,7 @@ export function mockSiteData(site: string, now = Date.now()): SiteRawData {
     uplink: { name: 'eth8', comment: 'WAN' },
     wan1: { ip: site === 'default' ? '203.0.113.42' : '198.51.100.7', up: true },
     wan2: { ip: '100.64.12.9', up: true },
+    geo_info: { WAN: { isp_name: 'Fibre ISP' } },
   });
 
   const switches = site === 'default' ? 2 : 1;
