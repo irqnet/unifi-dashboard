@@ -196,6 +196,12 @@ function migrate(db: Database.Database) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, scope)
     );
+    CREATE TABLE IF NOT EXISTS wan_settings (
+      site TEXT NOT NULL,
+      wan_key TEXT NOT NULL,
+      provider TEXT,
+      PRIMARY KEY (site, wan_key)
+    );
   `);
   const row = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
   if (!row) db.prepare('INSERT INTO schema_version (version) VALUES (1)').run();
@@ -337,6 +343,22 @@ export function upsertNetworkSetting(s: NetworkSetting) {
        ON CONFLICT(site, network_id) DO UPDATE SET hidden = excluded.hidden, anonymize_clients = excluded.anonymize_clients`,
     )
     .run(s.site, s.networkId, s.hidden ? 1 : 0, s.anonymizeClients ? 1 : 0);
+}
+
+// --- WAN settings ------------------------------------------------------------
+/** Provider names entered by the admin per WAN connection (key: WAN, WAN2 …). */
+export function listWanProviders(site: string): Map<string, string> {
+  const rows = getDb().prepare('SELECT wan_key, provider FROM wan_settings WHERE site = ?').all(site) as { wan_key: string; provider: string | null }[];
+  return new Map(rows.filter((r) => r.provider).map((r) => [r.wan_key, r.provider as string]));
+}
+
+export function setWanProvider(site: string, wanKey: string, provider: string | null) {
+  getDb()
+    .prepare(
+      `INSERT INTO wan_settings (site, wan_key, provider) VALUES (?, ?, ?)
+       ON CONFLICT(site, wan_key) DO UPDATE SET provider = excluded.provider`,
+    )
+    .run(site, wanKey, provider);
 }
 
 // --- Global settings ---------------------------------------------------------

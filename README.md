@@ -95,9 +95,10 @@ The admin area is laid out like macOS System Settings: a sidebar on the left wit
    - *Individual per VLAN:* a group heading with totals, followed by one card per VLAN.
 5. **Change order** (link above the group list) sets the order on the dashboard.
 6. **Privacy:** *Anonymise host names* replaces host name/IP/MAC of the clients (e.g. guest VLAN) with "Client n". Turning off *Show on the dashboard* hides the group.
-7. **All networks:** hide (*Show*) or anonymise (*Anonymous*) individual VLANs; *Show networks without a group* controls whether ungrouped networks appear as individual cards.
-8. **Devices:** combine switches and APs (name · model · MAC, with search) into groups such as "Basement rack" or "Outdoor". Devices are assigned by MAC address, so the assignment survives renaming. Groups can be sorted and hidden; ungrouped devices appear as "More switches" / "More access points" (can be switched off).
-9. **General:** controller and database health, reload data, interface language and default language for visitors, "Leave admin mode" and sign out.
+7. **Internet connections:** the provider shown in each WAN tile comes from the gateway's per-WAN geo lookup. If UniFi detects none (or the wrong one, e.g. for a 5G/LTE backup), enter the provider name here; an entered name always takes precedence.
+8. **All networks:** hide (*Show*) or anonymise (*Anonymous*) individual VLANs; *Show networks without a group* controls whether ungrouped networks appear as individual cards.
+9. **Devices:** combine switches and APs (name · model · MAC, with search) into groups such as "Basement rack" or "Outdoor". Devices are assigned by MAC address, so the assignment survives renaming. Groups can be sorted and hidden; ungrouped devices appear as "More switches" / "More access points" (can be switched off).
+10. **General:** controller and database health, reload data, interface language and default language for visitors, "Leave admin mode" and sign out.
 
 All settings are stored in `data/dashboard.db` (SQLite, WAL mode). If the directory is not writable, the dashboard keeps running with an in-memory database; the admin area shows a warning and the log names the path and UID.
 
@@ -217,6 +218,7 @@ npm run typecheck       # also catches missing German translations
 | `GET` | `/api/unifi/sites` | viewer | configured sites |
 | `GET` | `/api/unifi/dashboard?site=` | viewer | aggregated dashboard data incl. history |
 | `GET` / `PUT` | `/api/admin/networks` | admin | live networks + visibility/anonymisation |
+| `GET` / `PUT` | `/api/admin/wans` | admin | WAN connections + manual provider name (`{ site, key, provider }`) |
 | `GET` / `POST` | `/api/admin/groups` | admin | read/create groups |
 | `PUT` / `DELETE` | `/api/admin/groups/:id` | admin | update/delete a group |
 | `PUT` | `/api/admin/groups/order` | admin | set the order |
