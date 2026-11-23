@@ -14,6 +14,7 @@ import { networkTiles, type DetailTarget } from './NetworkCards';
 import { TileGrid, type TileDef, type TileSection } from './TileGrid';
 import { useTileLayout } from './useTileLayout';
 import { WanPanel } from './WanPanel';
+import { WanSplitPanel } from './WanSplitPanel';
 
 type Selected = { kind: 'group' | 'network'; id: string } | null;
 
@@ -149,6 +150,18 @@ export function Dashboard({
       fullBelowLg: true,
       render: () => <WanPanel wan={data.wan} link={links.length > 1 ? l : undefined} />,
     }));
+    // Total WAN throughput split by VLAN group
+    if (data.groups.length) {
+      wans.push({
+        id: 'wan:split',
+        title: t('wanSplit.title'),
+        w: 12,
+        h: 2,
+        section: 'wan',
+        fullBelowLg: true,
+        render: () => <WanSplitPanel wan={data.wan} links={links} groups={data.groups} />,
+      });
+    }
     const inNet = (tile: TileDef): TileDef => ({ ...tile, section: 'net' });
     if (view === 'network') {
       return [...kpis, ...wans, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open, t }).map(inNet)];
