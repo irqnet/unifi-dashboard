@@ -164,6 +164,18 @@ export interface SiteRawData {
   clients: RawClient[];
   networks: RawNetwork[];
   health: RawHealth[];
+  /** Speedtest results (UniFi Network v2 API); newer firmware no longer fills xput_* in stat/health. */
+  speedtests?: RawSpeedtest[];
+}
+
+/** Entry from v2/api/site/{site}/speedtest */
+export interface RawSpeedtest {
+  download_mbps?: number;
+  upload_mbps?: number;
+  latency_ms?: number;
+  time?: number;
+  interface_name?: string;
+  wan_networkgroup?: string;
 }
 
 /** Hotspot voucher from stat/voucher (classic Network API). */

@@ -163,6 +163,7 @@ class Poller {
       api.clients(st.site),
       api.health(st.site),
       needNetworks ? api.networks(st.site) : Promise.resolve(st.data!.networks),
+      needNetworks || !st.data?.speedtests ? api.speedtests(st.site) : Promise.resolve(st.data.speedtests),
     ]);
     // Don't let individual failing endpoints break the whole poll:
     // keep using the last known state, but report the error.
@@ -178,10 +179,11 @@ class Poller {
     const clients = pick(results[1], prev?.clients ?? []);
     const health = pick(results[2], prev?.health ?? []);
     const networks = pick(results[3], prev?.networks ?? []);
-    if (results.every((r) => r.status === 'rejected')) throw new Error(errors[0]);
+    const speedtests = results[4].status === 'fulfilled' ? results[4].value : (prev?.speedtests ?? []);
+    if (results.slice(0, 4).every((r) => r.status === 'rejected')) throw new Error(errors[0]);
     if (needNetworks && results[3].status === 'fulfilled') st.networksFetchedAt = Date.now();
     st.partialError = errors.length ? errors.join(' · ') : null;
-    return { devices, clients, health, networks };
+    return { devices, clients, health, networks, speedtests };
   }
 
   async pollSite(site: string) {
