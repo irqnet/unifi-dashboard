@@ -131,6 +131,18 @@ export function NetworksSection({
     else onChanged();
   };
 
+  const saveQuota = async (w: AdminWan, quotaText: string, dayText: string) => {
+    const q = Number.parseFloat(quotaText.replace(',', '.'));
+    const quotaGb = Number.isFinite(q) && q > 0 ? Math.min(q, 1_000_000) : null;
+    const d = Number.parseInt(dayText, 10);
+    const cycleDay = Number.isInteger(d) ? Math.min(28, Math.max(1, d)) : 1;
+    if (quotaGb === w.quotaGb && cycleDay === w.cycleDay) return;
+    setWans((list) => list.map((x) => (x.key === w.key ? { ...x, quotaGb, cycleDay } : x)));
+    const res = await api('/api/admin/wans', { method: 'PUT', body: JSON.stringify({ site, key: w.key, quotaGb, cycleDay }) });
+    if (res.error) onError(res.error);
+    else onChanged();
+  };
+
   const netById = new Map(networks.map((n) => [n.id, n]));
   const groupById = new Map(groups.map((g) => [g.id, g]));
   const editGroup = typeof editing === 'number' ? groups.find((g) => g.id === editing) : undefined;
@@ -206,25 +218,67 @@ export function NetworksSection({
       {wans.length > 0 && (
         <Group title={t('networks.wans')} footer={t('networks.wansFooter')}>
           {wans.map((w) => (
-            <div key={w.key} className="flex flex-col gap-1.5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:gap-3">
-              <div className="min-w-0 sm:w-56">
+            <div key={w.key} className="flex flex-col gap-1.5 px-3.5 py-2.5 sm:flex-row sm:items-start sm:gap-3">
+              <div className="min-w-0 sm:w-56 sm:pt-1.5">
                 <div className="truncate font-medium text-noc-text">{w.name}</div>
                 <div className="truncate text-[12px] text-noc-muted">
                   {w.key === 'WAN' ? 'WAN1' : w.key} · {w.detectedProvider ? t('networks.wanDetected', { provider: w.detectedProvider }) : t('networks.wanNotDetected')}
                 </div>
               </div>
-              <TextInput
-                key={`${w.key}:${w.provider ?? ''}`}
-                aria-label={t('networks.wanProviderLabel', { name: w.name })}
-                placeholder={w.detectedProvider ?? t('networks.wanProvider')}
-                defaultValue={w.provider ?? ''}
-                maxLength={60}
-                className="min-w-0 flex-1"
-                onBlur={(e) => void saveProvider(w, e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                }}
-              />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <TextInput
+                  key={`${w.key}:${w.provider ?? ''}`}
+                  aria-label={t('networks.wanProviderLabel', { name: w.name })}
+                  placeholder={w.detectedProvider ?? t('networks.wanProvider')}
+                  defaultValue={w.provider ?? ''}
+                  maxLength={60}
+                  className="min-w-0"
+                  onBlur={(e) => void saveProvider(w, e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                />
+                <div
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13px] text-noc-muted"
+                  onBlur={(e) => {
+                    const box = e.currentTarget;
+                    if (box.contains(e.relatedTarget as Node | null)) return;
+                    const [q, d] = Array.from(box.querySelectorAll('input')).map((i) => i.value);
+                    void saveQuota(w, q, d);
+                  }}
+                >
+                  <span>{t('networks.wanQuota')}</span>
+                  <span className="w-28">
+                    <TextInput
+                      key={`q${w.key}:${w.quotaGb ?? ''}`}
+                      aria-label={t('networks.wanQuotaLabel', { name: w.name })}
+                      inputMode="decimal"
+                      placeholder={t('networks.wanQuotaNone')}
+                      defaultValue={w.quotaGb ?? ''}
+                      className="rounded-md border border-noc-line px-2"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                    />
+                  </span>
+                  <span>{t('networks.wanQuotaUnit')}</span>
+                  <span className="ml-2">{t('networks.wanCycleDay')}</span>
+                  <span className="w-20">
+                    <TextInput
+                      key={`d${w.key}:${w.cycleDay}`}
+                      aria-label={t('networks.wanCycleDayLabel', { name: w.name })}
+                      type="number"
+                      min={1}
+                      max={28}
+                      defaultValue={w.cycleDay}
+                      className="rounded-md border border-noc-line px-2"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                    />
+                  </span>
+                </div>
+              </div>
             </div>
           ))}
         </Group>

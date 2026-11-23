@@ -4,7 +4,7 @@
  */
 import 'server-only';
 import { getConfig } from '../env';
-import { getSettings, listDeviceGroups, listGroups, listNetworkSettings, listWanProviders, type StatusPage } from '../db';
+import { getSettings, listDeviceGroups, listGroups, listNetworkSettings, listWanProviders, listWanQuotas, type StatusPage } from '../db';
 import type {
   AdminDevice,
   AdminNetwork,
@@ -27,6 +27,9 @@ import type {
 } from '../views';
 import { CONTROLLER_ERROR } from '../views';
 import { clientRates, getPoller, type Sample } from './poller';
+import { findActiveWan, wanKey } from './wan';
+
+export { findActiveWan };
 import type { RawDevice, RawNetwork } from './types';
 
 const EMPTY_WAN: WanView = {
@@ -115,7 +118,6 @@ function overallStatus(error: string | null, health: { subsystem: string; status
   return health.length ? 'online' : 'unknown';
 }
 
-const wanKey = (n: RawNetwork) => (n.wan_networkgroup ?? 'WAN').toUpperCase();
 
 /** Provider name of one WAN connection from the gateway's per-WAN geo lookup. */
 function detectedProvider(gw: RawDevice | undefined, key: string): string | null {
@@ -223,32 +225,6 @@ function wanLinks(
     for (const l of links) if (sum > 0 && l.role === 'active' && l.rawWeight) l.weight = Math.round((l.rawWeight / sum) * 100);
   }
   return links.map(({ rawWeight: _rw, ...l }) => l);
-}
-
-/**
- * Determines the currently active WAN network (for failover/multi-WAN):
- * 1. gateway uplink (uplink.comment/name = WAN, WAN2 …)
- * 2. WAN IP from stat/health matching wan1/wan2 of the gateway
- * 3. otherwise the primary WAN (wan_networkgroup = WAN)
- */
-export function findActiveWan(networks: RawNetwork[], gw: RawDevice | undefined, wanIp: string | null): RawNetwork | undefined {
-  const wans = networks.filter((n) => n.purpose === 'wan' && n.enabled !== false);
-  if (!wans.length) return undefined;
-  const byGroup = (g: string | undefined) => (g ? wans.find((n) => (n.wan_networkgroup ?? 'WAN').toUpperCase() === g.toUpperCase()) : undefined);
-  const uplinkGroup = [gw?.uplink?.comment, gw?.uplink?.name].find((v) => v && /^WAN\d*$/i.test(v));
-  const fromUplink = byGroup(uplinkGroup);
-  if (fromUplink) return fromUplink;
-  if (wanIp && gw) {
-    if (gw.wan2?.ip === wanIp || (gw.wan2?.up && gw.wan1?.up === false)) {
-      const w2 = byGroup('WAN2');
-      if (w2) return w2;
-    }
-    if (gw.wan1?.ip === wanIp) {
-      const w1 = byGroup('WAN');
-      if (w1) return w1;
-    }
-  }
-  return byGroup('WAN') ?? wans[0];
 }
 
 /**
@@ -635,6 +611,7 @@ export async function buildAdminWans(site: string): Promise<{ wans: AdminWan[] }
   const data = st.data;
   const gw = data?.devices.find((d) => ['ugw', 'udm', 'uxg'].includes(d.type));
   const providers = listWanProviders(site);
+  const quotas = listWanQuotas(site);
   const wanH = data?.health.find((h) => h.subsystem === 'wan');
   const nets = (data?.networks ?? [])
     .filter((n) => n.purpose === 'wan' && n.enabled !== false)
@@ -646,6 +623,8 @@ export async function buildAdminWans(site: string): Promise<{ wans: AdminWan[] }
       name: n.name || key,
       detectedProvider: detectedProvider(gw, key) ?? (nets.length === 1 || key === 'WAN' ? (wanH?.isp_name ?? null) : null),
       provider: providers.get(key) ?? null,
+      quotaGb: quotas.get(key)?.quotaGb ?? null,
+      cycleDay: quotas.get(key)?.cycleDay ?? 1,
     };
   });
   return { wans };

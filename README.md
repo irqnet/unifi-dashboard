@@ -19,13 +19,15 @@ Browser ──► middleware.ts (checks the JWT cookie: viewer / admin)
    Next.js route handlers (BFF, Node runtime) ◄──────────────────────┘
      ├─ lib/unifi/client.ts     UniFi API client (API key or login + CSRF, self-signed TLS)
      ├─ lib/unifi/poller.ts     Background poller per site + in-memory ring buffer (history)
+     ├─ lib/history.ts          Long-term history in SQLite (traffic per VLAN, failover, WAN data volume)
      ├─ lib/unifi/aggregate.ts  Group aggregation, privacy, hardware normalisation
      ├─ lib/i18n/               Translations (English / German) and language detection
      └─ lib/db.ts               SQLite: groups, network options, settings (/app/data/dashboard.db)
 ```
 
 - **Backend for frontend:** The browser never talks to the controller directly. Credentials stay on the server; CORS and self-signed certificates (`UNIFI_VERIFY_SSL=false`) are handled in the BFF.
-- **Poller & ring buffer:** Each site is polled every `POLLING_INTERVAL_MS`; every sample stores downstream/upstream and client count per network as well as the WAN throughput. The buffer keeps the last `HISTORY_MINUTES` (default 30). Group histories are computed by summing the contained VLANs. The history is deliberately volatile (lost on restart).
+- **Poller & ring buffer:** Each site is polled every `POLLING_INTERVAL_MS`; every sample stores downstream/upstream and client count per network as well as the WAN throughput. The buffer keeps the last `HISTORY_MINUTES` (default 30). Group histories are computed by summing the contained VLANs. This short-term history is volatile (lost on restart).
+- **Long-term history (SQLite):** the poller also writes 1-minute averages per network and of the WAN total (kept for 24 h, then as 15-minute averages for 7 days), which WAN carries the internet traffic (failover periods, 90 days) and the data volume per WAN and day (from the gateway byte counters, otherwise from the rates). It feeds the tiles *History by network* and *Failover history*. Day and month boundaries use the server time zone: set `TZ` (e.g. `Europe/Berlin`).
 - **UniFi endpoints:** `stat/device`, `stat/sta`, `rest/networkconf` (cached for 60 s), `stat/health`, `self/sites`. Prefix `/proxy/network` for UniFi OS, no prefix for classic controllers.
 - **Client-to-VLAN mapping:** `network_id` → network name → subnet match of the client IP.
 - **Traffic direction:** `tx_bytes-r` (or `wired-tx_bytes-r`) from the infrastructure's point of view = **download** to the client, `rx_bytes-r` = **upload**.
@@ -95,7 +97,7 @@ The admin area is laid out like macOS System Settings: a sidebar on the left wit
    - *Individual per VLAN:* a group heading with totals, followed by one card per VLAN.
 5. **Change order** (link above the group list) sets the order on the dashboard.
 6. **Privacy:** *Anonymise host names* replaces host name/IP/MAC of the clients (e.g. guest VLAN) with "Client n". Turning off *Show on the dashboard* hides the group.
-7. **Internet connections:** the provider shown in each WAN tile comes from the gateway's per-WAN geo lookup. If UniFi detects none (or the wrong one, e.g. for a 5G/LTE backup), enter the provider name here; an entered name always takes precedence.
+7. **Internet connections:** the provider shown in each WAN tile comes from the gateway's per-WAN geo lookup. If UniFi detects none (or the wrong one, e.g. for a 5G/LTE backup), enter the provider name here; an entered name always takes precedence. *Data per month* and *resets on day* set a monthly allowance (e.g. of a 5G/LTE backup); usage against it appears in the *Failover history* tile.
 8. **All networks:** hide (*Show*) or anonymise (*Anonymous*) individual VLANs; *Show networks without a group* controls whether ungrouped networks appear as individual cards.
 9. **Devices:** combine switches and APs (name · model · MAC, with search) into groups such as "Basement rack" or "Outdoor". Devices are assigned by MAC address, so the assignment survives renaming. Groups can be sorted and hidden; ungrouped devices appear as "More switches" / "More access points" (can be switched off).
 10. **General:** controller and database health, reload data, interface language and default language for visitors, "Leave admin mode" and sign out.
@@ -186,7 +188,8 @@ npm run typecheck       # also catches missing German translations
 | `UNIFI_CONTROLLER_TYPE` | `auto` | `auto` / `unifios` / `classic` |
 | `UNIFI_VERIFY_SSL` | `true` | `false` for self-signed certificates |
 | `POLLING_INTERVAL_MS` | `5000` | backend polling interval |
-| `HISTORY_MINUTES` | `30` | length of the history ring buffer |
+| `HISTORY_MINUTES` | `30` | length of the in-memory history ring buffer (the long-term history in SQLite is independent of it) |
+| `TZ` | – (UTC) | server time zone, e.g. `Europe/Berlin`; sets the day and month boundaries of the WAN data volume |
 | `UNIFI_MOCK` | `false` | demo data |
 | `WAN_BANDWIDTH_DOWN_MBPS` / `WAN_BANDWIDTH_UP_MBPS` | – | fallback bandwidth for WAN utilisation if no "Expected ISP Speeds" are set in UniFi for the active WAN (after that: last speed test, peak value) |
 | `ACCESS_PASSWORD` | – | access password (empty = Turnstile only) |
@@ -217,8 +220,10 @@ npm run typecheck       # also catches missing German translations
 | `GET` | `/api/health` | – | health check |
 | `GET` | `/api/unifi/sites` | viewer | configured sites |
 | `GET` | `/api/unifi/dashboard?site=` | viewer | aggregated dashboard data incl. history |
+| `GET` | `/api/unifi/history?site=&range=` | viewer | traffic history per VLAN group (`range` = 1, 6, 24 or 168 hours) |
+| `GET` | `/api/unifi/wan-history?site=` | viewer | failover periods of the last 30 days and data volume per WAN in the current month |
 | `GET` / `PUT` | `/api/admin/networks` | admin | live networks + visibility/anonymisation |
-| `GET` / `PUT` | `/api/admin/wans` | admin | WAN connections + manual provider name (`{ site, key, provider }`) |
+| `GET` / `PUT` | `/api/admin/wans` | admin | WAN connections + manual provider name and monthly allowance (`{ site, key, provider?, quotaGb?, cycleDay? }`) |
 | `GET` / `POST` | `/api/admin/groups` | admin | read/create groups |
 | `PUT` / `DELETE` | `/api/admin/groups/:id` | admin | update/delete a group |
 | `PUT` | `/api/admin/groups/order` | admin | set the order |
