@@ -105,7 +105,7 @@ function SegmentGauge({
   const util = capacity ? Math.min(100, (total / capacity) * 100) : null;
   return (
     <div className="flex min-w-0 flex-col items-center">
-      <div className="relative aspect-[180/96] w-[150px] @md:w-[200px]">
+      <div className="relative aspect-[180/96] w-[96px] @md:w-[116px]">
         <svg viewBox="0 0 180 96" className="h-full w-full" aria-hidden>
           <path d={ARC} fill="none" stroke="rgb(var(--c-track))" strokeWidth="16" strokeLinecap="round" />
           <path d={INNER_ARC} fill="none" stroke="rgb(var(--c-track))" strokeWidth="5" strokeLinecap="round" />
@@ -135,18 +135,18 @@ function SegmentGauge({
             />
           ))}
         </svg>
-        <div className="absolute inset-x-0 bottom-0 text-center font-mono text-sm font-semibold leading-none tabular-nums text-noc-muted @md:text-base">
+        <div className="absolute inset-x-0 bottom-0 text-center font-mono text-xs font-semibold leading-none tabular-nums text-noc-muted @md:text-sm">
           {util !== null ? pctText(util) : '–'}
         </div>
       </div>
-      <div className="mt-2 whitespace-nowrap font-mono text-lg font-semibold leading-none tabular-nums @md:text-2xl" style={{ color }}>
+      <div className="mt-1.5 whitespace-nowrap font-mono text-base font-semibold leading-none tabular-nums @md:text-lg" style={{ color }}>
         {formatBps(total)}
       </div>
-      <div className="mt-1.5 flex items-center gap-1 text-[11px] uppercase tracking-wider @md:text-xs" style={{ color }}>
+      <div className="mt-1 flex items-center gap-1 text-[10px] uppercase tracking-wider @md:text-[11px]" style={{ color }}>
         {icon}
         {label}
       </div>
-      <div className="mt-0.5 text-[11px] text-noc-muted">
+      <div className="mt-0.5 text-[10px] text-noc-muted">
         {capacity ? t('wanSplit.utilisationOf', { capacity: capText(capacity) }) : t('wan.capacityUnknown')}
       </div>
     </div>
@@ -183,8 +183,8 @@ export function WanSplitPanel({ wan, links, groups }: { wan: WanView; links: Wan
   const cols = '@lg:grid-cols-[minmax(0,1fr),minmax(0,1.2fr),minmax(0,1.2fr)]';
 
   return (
-    <section className="tile-shadow flex h-full flex-col rounded-xl border border-noc-line bg-noc-panel p-3 @md:p-4 @3xl:p-5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+    <section className="tile-shadow flex h-full flex-col rounded-xl border border-noc-line bg-noc-panel p-3 @3xl:p-4">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-noc-text">
           <PieChart className="h-4 w-4 shrink-0 text-noc-muted" /> {t('wanSplit.title')}
           <span className="font-normal text-noc-muted">· {t('wanSplit.total')}</span>
@@ -204,7 +204,7 @@ export function WanSplitPanel({ wan, links, groups }: { wan: WanView; links: Wan
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 items-center gap-5 @3xl:grid-cols-[auto,1fr] @3xl:gap-8">
+      <div className="grid min-h-0 flex-1 items-center gap-3 @3xl:grid-cols-[auto,1fr] @3xl:gap-8">
         <div className="flex items-start justify-around gap-4 @3xl:gap-8">
           <SegmentGauge label="Download" icon={<ArrowDown className="h-3.5 w-3.5" />} total={totals.down} capacity={totals.capacityDown} rows={rows} dir="down" color="rgb(var(--c-down))" />
           <SegmentGauge label="Upload" icon={<ArrowUp className="h-3.5 w-3.5" />} total={totals.up} capacity={totals.capacityUp} rows={rows} dir="up" color="rgb(var(--c-up))" />
@@ -222,7 +222,7 @@ export function WanSplitPanel({ wan, links, groups }: { wan: WanView; links: Wan
           </div>
           <ul className="divide-y divide-noc-line/60">
             {rows.map((r) => (
-              <li key={r.id} className={`grid grid-cols-2 items-center gap-x-4 gap-y-1 py-1.5 text-sm ${cols}`}>
+              <li key={r.id} className={`grid grid-cols-2 items-center gap-x-4 gap-y-0.5 py-1 text-xs ${cols}`}>
                 <span className="col-span-2 flex min-w-0 items-center gap-2 @lg:col-span-1">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: r.color }} />
                   <span className={`truncate ${r.id === OTHER_ID ? 'text-noc-muted' : 'text-noc-text'}`}>{r.name}</span>
@@ -241,7 +241,7 @@ export function WanSplitPanel({ wan, links, groups }: { wan: WanView; links: Wan
           </ul>
         </div>
       </div>
-      <p className="mt-3 hidden text-[11px] text-noc-muted @md:block">
+      <p className="mt-2 hidden truncate text-[10px] text-noc-muted @md:block">
         {t('wanSplit.legend')}
         {unit === 'pct' ? ` ${t('wanSplit.legendPct')}` : ''}
         {scaled ? ` ${t('wanSplit.scaled')}` : ''}
