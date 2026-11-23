@@ -147,7 +147,10 @@ function wanLinks(
   }
   const perLink = samples.some((s) => s.wans);
   const types = nets.map((n) => n.wan_load_balance_type?.toLowerCase());
-  const mode: WanLinkView['mode'] = types.includes('weighted') ? 'loadbalance' : types.some((t) => t?.startsWith('failover')) ? 'failover' : null;
+  // UniFi requires at least one "weighted" WAN even in failover mode: load balancing = 2+ weighted links.
+  const weightedCount = types.filter((t) => t === 'weighted').length;
+  const mode: WanLinkView['mode'] =
+    weightedCount >= 2 ? 'loadbalance' : types.some((t) => t?.startsWith('failover')) ? 'failover' : null;
   const links = nets.map((n) => {
     const key = wanKey(n);
     const isActive = n === activeNet;
