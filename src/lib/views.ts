@@ -226,6 +226,10 @@ export interface AdminWan {
   name: string;
   detectedProvider: string | null;
   provider: string | null;
+  /** Monthly data allowance in GB, null = no limit */
+  quotaGb: number | null;
+  /** Day of the month on which the allowance resets (1–28) */
+  cycleDay: number;
 }
 
 export interface AdminNetwork {

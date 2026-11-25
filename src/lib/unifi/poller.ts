@@ -6,6 +6,7 @@
  */
 import 'server-only';
 import { getConfig } from '../env';
+import { recordPoll } from '../history';
 import { UniFiClient } from './client';
 import { MOCK_SITES, mockSiteData } from './mock';
 import type { RawClient, RawNetwork, RawSite, SiteRawData } from './types';
@@ -212,13 +213,15 @@ class Poller {
           wans[i === 1 ? 'WAN' : `WAN${i}`] = [(port['rx_bytes-r'] ?? 0) * 8, (port['tx_bytes-r'] ?? 0) * 8];
         }
       });
-      st.history.push({
+      const sample: Sample = {
         t: Date.now(),
         wanDown: (wan?.['rx_bytes-r'] ?? 0) * 8,
         wanUp: (wan?.['tx_bytes-r'] ?? 0) * 8,
         ...(Object.keys(wans).length ? { wans } : {}),
         nets,
-      });
+      };
+      st.history.push(sample);
+      recordPoll(site, sample, data);
       st.data = data;
       st.clientNet = clientNet;
       st.lastPoll = Date.now();

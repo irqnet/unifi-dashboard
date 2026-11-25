@@ -93,6 +93,9 @@ export interface RawWanPort {
   ifname?: string;
   'rx_bytes-r'?: number;
   'tx_bytes-r'?: number;
+  /** Byte counters since the last gateway restart (not provided by every firmware) */
+  rx_bytes?: number;
+  tx_bytes?: number;
 }
 
 export interface RawClient {

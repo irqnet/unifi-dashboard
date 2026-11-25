@@ -15,6 +15,9 @@ import { TileGrid, type TileDef, type TileSection } from './TileGrid';
 import { useTileLayout } from './useTileLayout';
 import { WanPanel } from './WanPanel';
 import { WanSplitPanel } from './WanSplitPanel';
+import { FailoverPanel } from './FailoverPanel';
+import { HistoryPanel } from './HistoryPanel';
+import { TopClientsPanel } from './TopClientsPanel';
 
 type Selected = { kind: 'group' | 'network'; id: string } | null;
 
@@ -164,7 +167,26 @@ export function Dashboard({
     }
     const inNet = (tile: TileDef): TileDef => ({ ...tile, section: 'net' });
     if (view === 'network') {
-      return [...kpis, ...wans, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open, t }).map(inNet)];
+      // History, top clients and failover only on the main dashboard (not on status pages)
+      const siteId = site || data.site;
+      const extra: TileDef[] = [];
+      if (data.groups.length) {
+        extra.push({ id: 'wan:history', title: t('history.title'), w: 12, h: 2, section: 'wan', fullBelowLg: true, render: () => <HistoryPanel site={siteId} groups={data.groups} /> });
+      }
+      const multi = links.length > 1;
+      extra.push({
+        id: 'wan:top',
+        title: t('top.title'),
+        w: multi ? 6 : 12,
+        h: 2,
+        section: 'wan',
+        fullBelowLg: true,
+        render: () => <TopClientsPanel groups={data.groups} networks={data.networks} ungrouped={data.ungrouped} />,
+      });
+      if (multi) {
+        extra.push({ id: 'wan:failover', title: t('failover.title'), w: 6, h: 2, section: 'wan', fullBelowLg: true, render: () => <FailoverPanel site={siteId} /> });
+      }
+      return [...kpis, ...wans, ...extra, ...networkTiles({ groups: data.groups, networks: data.networks, ungrouped: data.ungrouped, onOpen: open, t }).map(inNet)];
     }
     if (view === 'hardware') return [...kpis, ...hardwareTiles(data, t)];
     const showWan = !!data.statusPage?.showWan;
@@ -174,7 +196,7 @@ export function Dashboard({
       ...nets,
       ...(data.deviceGroups.length ? hardwareTiles(data, t).map((h) => ({ ...h, section: 'hw' })) : []),
     ];
-  }, [data, view, open, t]);
+  }, [data, view, open, t, site]);
 
   const sections: TileSection[] | undefined = useMemo(() => {
     if (view === 'hardware') return undefined;

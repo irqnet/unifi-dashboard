@@ -202,12 +202,58 @@ function migrate(db: Database.Database) {
       provider TEXT,
       PRIMARY KEY (site, wan_key)
     );
+    -- Traffic history: average bit/s per network (net_id '__wan' = WAN total) over span minutes
+    -- (1-minute values for 24 h, then 15-minute values for 7 days)
+    CREATE TABLE IF NOT EXISTS traffic_history (
+      site TEXT NOT NULL,
+      t INTEGER NOT NULL,
+      span INTEGER NOT NULL,
+      net_id TEXT NOT NULL,
+      down REAL NOT NULL,
+      up REAL NOT NULL,
+      PRIMARY KEY (site, t, span, net_id)
+    ) WITHOUT ROWID;
+    -- Which WAN carried the internet traffic when ('' = no internet)
+    CREATE TABLE IF NOT EXISTS wan_periods (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site TEXT NOT NULL,
+      wan_key TEXT NOT NULL,
+      reason TEXT,
+      started_at INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      ended_at INTEGER,
+      rx_bytes REAL NOT NULL DEFAULT 0,
+      tx_bytes REAL NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_wan_periods_site ON wan_periods(site, started_at);
+    -- Data volume per WAN and day (server-local date)
+    CREATE TABLE IF NOT EXISTS wan_usage (
+      site TEXT NOT NULL,
+      wan_key TEXT NOT NULL,
+      day TEXT NOT NULL,
+      rx_bytes REAL NOT NULL DEFAULT 0,
+      tx_bytes REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (site, wan_key, day)
+    ) WITHOUT ROWID;
+    -- Last byte counters of the gateway per WAN (to count the volume across restarts)
+    CREATE TABLE IF NOT EXISTS wan_counters (
+      site TEXT NOT NULL,
+      wan_key TEXT NOT NULL,
+      rx_bytes REAL NOT NULL,
+      tx_bytes REAL NOT NULL,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (site, wan_key)
+    ) WITHOUT ROWID;
   `);
   const row = db.prepare('SELECT version FROM schema_version LIMIT 1').get() as { version: number } | undefined;
   if (!row) db.prepare('INSERT INTO schema_version (version) VALUES (1)').run();
   // v2: per-user language
   const userCols = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
   if (!userCols.some((c) => c.name === 'language')) db.exec('ALTER TABLE users ADD COLUMN language TEXT');
+  // v3: data allowance per WAN
+  const wanCols = db.prepare('PRAGMA table_info(wan_settings)').all() as { name: string }[];
+  if (!wanCols.some((c) => c.name === 'quota_gb')) db.exec('ALTER TABLE wan_settings ADD COLUMN quota_gb REAL');
+  if (!wanCols.some((c) => c.name === 'cycle_day')) db.exec('ALTER TABLE wan_settings ADD COLUMN cycle_day INTEGER');
 }
 
 // --- Groups --------------------------------------------------------------------
@@ -350,6 +396,31 @@ export function upsertNetworkSetting(s: NetworkSetting) {
 export function listWanProviders(site: string): Map<string, string> {
   const rows = getDb().prepare('SELECT wan_key, provider FROM wan_settings WHERE site = ?').all(site) as { wan_key: string; provider: string | null }[];
   return new Map(rows.filter((r) => r.provider).map((r) => [r.wan_key, r.provider as string]));
+}
+
+export interface WanQuota {
+  /** Monthly data allowance in GB, null = no limit */
+  quotaGb: number | null;
+  /** Day of the month on which the allowance resets (1–28) */
+  cycleDay: number;
+}
+
+export function listWanQuotas(site: string): Map<string, WanQuota> {
+  const rows = getDb().prepare('SELECT wan_key, quota_gb, cycle_day FROM wan_settings WHERE site = ?').all(site) as {
+    wan_key: string;
+    quota_gb: number | null;
+    cycle_day: number | null;
+  }[];
+  return new Map(rows.map((r) => [r.wan_key, { quotaGb: r.quota_gb && r.quota_gb > 0 ? r.quota_gb : null, cycleDay: r.cycle_day ?? 1 }]));
+}
+
+export function setWanQuota(site: string, wanKey: string, q: WanQuota) {
+  getDb()
+    .prepare(
+      `INSERT INTO wan_settings (site, wan_key, quota_gb, cycle_day) VALUES (?, ?, ?, ?)
+       ON CONFLICT(site, wan_key) DO UPDATE SET quota_gb = excluded.quota_gb, cycle_day = excluded.cycle_day`,
+    )
+    .run(site, wanKey, q.quotaGb, q.cycleDay);
 }
 
 export function setWanProvider(site: string, wanKey: string, provider: string | null) {
